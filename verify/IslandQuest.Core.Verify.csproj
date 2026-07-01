@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- No NuGet packages on purpose: this sandbox has no NuGet access, and
+         more importantly, the goal is to compile + run the *actual* game
+         source below with zero dependency drift. See design.md §5. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <!-- Link (not copy) the real Unity-bound source files: one source of
+         truth, no chance of "tests pass against a stale copy". -->
+    <Compile Include="../Assets/Scripts/Match3/*.cs" />
+  </ItemGroup>
+
+</Project>

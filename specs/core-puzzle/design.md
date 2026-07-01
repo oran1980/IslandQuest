@@ -1,0 +1,237 @@
+# Design — Core Puzzle (Match-3 Board)
+
+Implements: `requirements.md` (Requirements 1–2 now; 3–4 stubbed for later
+tasks). Maps to GDD §11.1 folder layout and §11.2 class table.
+
+## 1. Layering decision
+
+GDD §11.2 lists `BoardController` and `MatchFinder` as if they were one
+Unity-coupled layer. We split that into two layers instead:
+
+- **`IslandQuest.Match3` (engine-agnostic core)** — plain C#, zero
+  `UnityEngine` references. Lives at `Assets/Scripts/Match3/*.cs`. Holds all
+  board state and rules: generation, match detection, (later) swap/cascade/
+  booster/credit logic. Unity will compile these files as ordinary scripts
+  with no extra setup — nothing below depends on MonoBehaviour.
+- **`BoardController` (Unity presentation, later task)** — a MonoBehaviour
+  that owns input (drag detection), tile prefab instantiation/animation, and
+  forwards player intent into the core layer's API. It reads results back to
+  decide what to animate. No game *rules* live here, only presentation.
+
+Rationale: the GDD's win condition for M1 ("Working Match-3 board") is rules
+correctness, and rules correctness is exactly what's cheap to get wrong and
+expensive to debug inside the Unity Editor. Keeping rules engine-agnostic
+means they can be compiled and unit-verified with a plain `dotnet` toolchain
+in CI, independent of an Editor license/GPU, and the same files drop straight
+into the Unity project with no porting step later.
+
+## 2. Data model
+
+```
+TileType (enum)      Flower | Leaf | Wave | Sun | Mushroom | Coral
+                      — GDD §7.2, one per nature/survival theme.
+
+BoosterType (enum)   None | BloomBurst | LeafWheel | TidalClear
+                      | SolarFlare | SporeCloud | DeepSurge
+                      — GDD §7.2 "Booster on 4+ match" column.
+                      Defined now (Task 1) so Tile's shape is stable;
+                      booster *spawn/activation logic* is Task 5.
+
+MatchGroup (class, Task 2)
+  TileType Type
+  IReadOnlyCollection<(int Row,int Col)> Cells
+  int Size => Cells.Count
+  bool IsBoosterEligible => Size >= 4         — GDD §7.2 exact threshold
+  BoosterType AwardedBooster                  — via BoosterRules.ForTileType
+
+BoosterRules (static class, Task 2)
+  One color -> one booster, per the GDD §7.2 table verbatim. Correction vs.
+  an earlier draft of this document: eligibility depends only on match
+  *size* and *color*, not shape. The GDD does not distinguish a straight
+  run-of-4 from an L/T merge of two runs that happens to total 4+ cells —
+  there is one booster per color, full stop. (An earlier version of this
+  design doc speculated shape mattered, by analogy to other match-3 games;
+  that wasn't grounded in this GDD and has been removed.)
+
+Tile (readonly struct)
+  TileType Type
+  BoosterType Booster   (defaults to None until Task 5 wires it up)
+  bool HasCreditBag
+
+BoardConfig (class, immutable after construction)
+  int Rows = 9, int Columns = 9        — GDD §7.1
+  TileType[] AllowedTileTypes          — defaults to all 6
+  int? Seed                            — null = nondeterministic
+  int MinInitialCreditBags = 1
+  int MaxInitialCreditBags = 2         — GDD §7.1 "approx. 1-2 per level"
+
+Board (class)
+  Tile[,] grid, indexer Board[row, col]
+  Rows, Columns, InBounds(r,c), Clone()
+```
+
+`Tile` is a struct (value type) so swapping/cloning never aliases shared
+mutable state between board snapshots — important once Task 3's
+swap-then-validate-then-revert flow needs a cheap "undo."
+
+## 3. Algorithms
+
+### 3.1 Match detection (`MatchFinder.FindMatchedCells`)
+
+Single linear sweep per axis using a run-length scan with a sentinel index
+(`c <= Columns`, `r <= Rows`) so the final run in each row/column flushes
+without a separate end-of-loop special case:
+
+```
+for each row:
+  runStart = 0
+  for c in 1..Columns inclusive:
+    sameAsPrev = (c < Columns) && type[r,c] == type[r,c-1]
+    if not sameAsPrev:
+      if (c - runStart) >= 3: mark cells [runStart, c) as matched
+      runStart = c
+(mirrored for columns)
+```
+
+Cost: O(Rows×Columns), single pass per axis, no allocations beyond the result
+set. Cells in both a horizontal and vertical run land in the same `HashSet`,
+satisfying Requirement 2.3 (no duplicates) for free.
+
+This becomes the single source of truth every other rule calls: generation
+calls it to verify "no pre-existing match" (Req 1.3) and to test legal moves
+(Req 1.4); the future swap/cascade code (Task 3–4) calls it again rather than
+re-implementing detection.
+
+### 3.1b Grouping matched cells into MatchGroups (`MatchResolver`, Task 2)
+
+`MatchFinder` returns a flat set of matched cells with no notion of which
+cells belong to the same physical blob — a board can have two unrelated
+matches of the same color in the same scan, and a flat set can't tell them
+apart. `MatchResolver.FindMatchGroups` runs a 4-directional flood fill
+restricted to cells that are (a) in the matched-cells set and (b) the same
+`TileType`, turning the flat set into connected components. An L/T-shaped
+overlap (a horizontal and vertical run sharing a corner cell, same color)
+correctly merges into **one** `MatchGroup`, since that's one connected blob —
+this matters because `IsBoosterEligible` is a per-group threshold (`Size >=
+4`), and double-counting a merged blob as two separate groups would award two
+boosters where the GDD's table implies one.
+
+### 3.2 Board generation (`BoardGenerator.Generate`)
+
+Two steps, chosen specifically to avoid the more common but slower
+"randomize, then rescan and patch" approach:
+
+**Step A — constructive matchless fill.** Fill row-major, left-to-right,
+top-to-bottom. At each cell, start from the full allowed-type list and remove:
+- the type that would extend a horizontal run (when the two tiles
+  immediately to the left already match each other), and
+- the type that would extend a vertical run (when the two tiles immediately
+  above already match each other).
+
+With `AllowedTileTypes.Length >= 3` (enforced by `BoardConfig`'s constructor),
+at most 2 types get removed, so a legal choice always remains. By induction —
+each cell is placed only after confirming no run of 3 exists in any
+already-placed cell — the **entire finished board is provably matchless** by
+construction. No rescan-and-fix pass, no rejection loop, no edge case where
+generation has to retry because of bad luck. (A unit test below confirms this
+empirically across many seeds and board sizes as a guard against a future
+refactor breaking the invariant.)
+
+**Step B — guarantee a legal move exists.** Constructive fill doesn't promise
+the player *can* do anything — it's plausible, if rare, for a freshly
+generated 9×9 board to have zero adjacent swaps that create a match.
+`HasLegalMove` checks every adjacent pair (swap → check `MatchFinder` →
+swap back) and `Generate` retries (regenerate from scratch, new RNG state)
+up to 25 times if it's ever false. On a 9×9 grid with 6 tile types the
+probability of needing more than one attempt is negligible; the retry exists
+as a correctness guarantee, not a tuning knob, and a degenerate `BoardConfig`
+(e.g. exactly 3 allowed types on a tiny grid) that genuinely can't satisfy
+both invariants will exhaust attempts and throw `InvalidOperationException`
+with a message pointing at the config, rather than silently handing the
+player an unsolvable board.
+
+**Step C — place credit bags.** After the board is finalized, pick a random
+count in `[MinInitialCreditBags, MaxInitialCreditBags]` and flag that many
+distinct random cells with `HasCreditBag = true`. Done last, after the board
+shape is locked in, so it never interacts with the matchless-fill invariant.
+
+### 3.3 Determinism
+
+All randomness flows through one `System.Random` instance seeded from
+`BoardConfig.Seed` (or unseeded/time-based if null). No other source of
+randomness exists in this module, so a given seed reproduces an identical
+board — needed for unit tests, and useful later for "replay this level"
+debugging or fairness audits.
+
+## 4. What's explicitly deferred (and why it's safe to defer)
+
+- **Swap commit/revert (Req 3), cascades, boosters, credit collection,
+  star-rating payout, lives** — each needs `MatchFinder` and `Board` to exist
+  first; building them now would mean designing the swap API against an
+  unstable foundation. `tasks.md` sequences these as Tasks 3–8.
+- **Unity `BoardController` MonoBehaviour** — intentionally last (Task 9),
+  once the rules it wraps can't change underneath it.
+
+## 5. Test strategy
+
+No Unity Editor and no NuGet access exist in this environment (NuGet restore
+is blocked by network policy — confirmed before writing any code), so this
+spec uses a **dependency-free verification program** instead of xUnit/NUnit:
+plain `Main()` assertions, compiled and run via `dotnet run`, that include the
+exact same `.cs` files Unity will later compile (via `<Compile Include>` in
+the verify project, not copies — one source of truth). This is a deliberate,
+documented substitution for a conventional test framework, not a shortcut:
+every assertion still really compiles and really executes.
+
+### 3.4 Cascade resolution (`CascadeEngine`, Task 4)
+
+Implements Requirement 4a. Row index convention (not previously stated
+explicitly, made explicit here since gravity needs a direction): **row 0 is
+the top of the board, increasing row index moves down** — consistent with
+`BoardGenerator`'s row-major top-to-bottom fill order.
+
+```
+ResolveCascade(board, config, rng):
+  rounds = []
+  loop:
+    groups = MatchResolver.FindMatchGroups(board)
+    if groups is empty: break
+    clear every cell in every group (mark empty)
+    for each column:
+      compact surviving (non-empty) cells downward, preserving relative order
+      fill newly-emptied cells at the top with Random.Choice(config.AllowedTileTypes)
+    rounds.append(groups)
+  if rounds.Count >= 3:
+    bonusCredits = 10
+    drop 1 new credit bag on a random non-bag cell
+  else:
+    bonusCredits = 0
+  return CascadeResult(rounds.Count, bonusCredits, rounds)
+```
+
+Two deliberate non-choices, both corrected before implementation (see
+tasks.md Task 4's correction note for the first):
+
+- **Refill is plain uniform-random, not matchless-fill.** A refill that
+  happens to create a match is the mechanism by which a cascade chain
+  continues -- the loop's next iteration catches it via the same
+  `MatchResolver` call everything else uses. Forcing matchless refill would
+  make multi-round cascades rare-to-impossible, contradicting the GDD's
+  documented combo system (§6.2, §5.1, §11.2) existing at all.
+- **An explicit round cap, not an unbounded loop.** Unlike initial
+  generation (which guarantees a result algorithmically and retries from
+  scratch up to a cap), a cascade is open-ended by nature -- there's no
+  "scratch" to retry from mid-game. `ResolveCascade` takes a generous
+  `maxRounds` safety cap (50) and throws if exceeded, on the premise that
+  hitting it indicates a bug (e.g. a refill step that isn't actually
+  shrinking the empty-cell count) rather than a legitimate player cascade --
+  50 rounds from one swap is not a real scenario with 6 tile types on a 9x9
+  board.
+
+### Design correction log
+
+- Booster eligibility (§2): corrected from a speculative shape-based theory
+  to the GDD's actual color+size rule, before Task 2 was implemented.
+- Cascade refill (§3.4): corrected from a speculative matchless-refill rule
+  (which would have suppressed real cascades) to plain random refill, before
+  Task 4 was implemented.
