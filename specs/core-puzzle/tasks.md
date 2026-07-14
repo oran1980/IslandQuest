@@ -126,6 +126,34 @@ end state, so this is auditable rather than asserted.
     synthetic test boards.
   - _Implementation: `Assets/Scripts/Match3/LevelData.cs` and `Assets/Scripts/LevelDataAsset.cs`._
 
+- [ ] **11. Manual booster activation via swap**
+  - Two new swap outcomes, both bypassing `SwapEngine`'s normal
+    only-commit-if-match rule: (a) swapping two adjacent **BloomBurst**
+    boosters together fires BloomBurst's row-clear immediately; (b) swapping
+    any booster with an adjacent **non-booster** tile fires that booster's
+    own GDD §7.2 effect "aimed" through the non-booster tile's position
+    instead of the booster's own (row/column/3x3-zone/one-color effects
+    retarget to the swapped-with tile; the two board-anchored effects,
+    SporeCloud and DeepSurge, are unaffected since they were never
+    position-anchored to begin with).
+  - Scope decisions (which booster pairing gets a combo effect, and what a
+    booster+regular-tile swap does) were confirmed directly with the user
+    rather than derived from the GDD, which doesn't address manual
+    activation at all — see requirements.md's Requirement 5c for the
+    full record.
+  - Proposed new symbols (names only, not binding — may be renamed during
+    implementation if a cleaner shape emerges): `BoosterActivation.
+    GetAffectedCellsAimed` (new overload, existing `GetAffectedCells` stays
+    untouched), `SwapEngine.TryManualActivationSwap`, `CascadeEngine.
+    ResolveCascadeFrom` (cascade loop entry point that starts from a
+    pre-determined cleared-cell set instead of discovering one via
+    `MatchResolver`, so manual activations reuse the same cascade machinery
+    as ordinary matches).
+  - _Satisfies: Requirement 5c (all criteria)._
+  - _Verification: planned RED test list below — not yet implemented, so
+    not yet run. See "Planned RED tests for Task 11" at the end of this
+    file._
+
 ---
 
 ## How Task 1 was verified
@@ -316,3 +344,87 @@ Specific checks:
   match, seed 44) confirms exactly one `LeafWheel` booster tile survives on
   the board once cascading settles, rather than being cleared along with
   the rest of its group.
+
+## Planned RED tests for Task 11 (not yet implemented — no production code exists for these symbols yet)
+
+This is a pre-written test plan, not a verification record — nothing below
+has been run. Per this project's TDD process (see the methodology note at
+the top of this file), the correct next step is to add these to
+`verify/Program.cs` referencing symbols that don't exist yet, confirm each
+one fails to compile first, and only then implement. Recorded here ahead of
+time so the RED step has a concrete checklist to work from rather than
+being improvised.
+
+**Layer 1 — `BoosterActivation.GetAffectedCellsAimed` (pure, isolated from swap/cascade mechanics)**
+
+1. `Aimed_BloomBurst_ClearsTargetRow_NotBoostersOwnRow` — booster physically
+   sitting in one row, target in a different row; assert the returned cells
+   are all of the *target's* row, and the booster's own row is untouched.
+2. `Aimed_LeafWheel_ClearsTargetColumn` — same shape as #1, for the target
+   column instead of the booster's own.
+3. `Aimed_TidalClear_3x3AroundTarget_ClipsAtEdge` — target placed at a board
+   corner; same edge-clipping check as Requirement 5's original `TidalClear`
+   test, centered on the target instead of the booster.
+4. `Aimed_SolarFlare_ReadsTargetColor_NotBoostersColor` — booster and target
+   are different colors; assert the result matches every tile of the
+   *target's* color, and explicitly assert no booster-color-only tile is
+   incorrectly included.
+5. `Aimed_SolarFlare_ReadsColorBeforeAnyMutation` — call the method twice in
+   a row with no mutation between calls; assert identical results, guarding
+   against an ordering bug where the target cell's color gets cleared before
+   it's read.
+6. `Aimed_SporeCloud_IgnoresTargetPosition_SameContractAsNormal` — assert
+   exactly 5 distinct in-bounds cells, matching the existing non-aimed
+   `SporeCloud` test's contract regardless of what target is passed.
+7. `Aimed_DeepSurge_IgnoresTargetPosition_SameContractAsNormal` — assert
+   both bottom rows, full width, regardless of target.
+
+**Layer 2 — `SwapEngine.TryManualActivationSwap` (orchestration decision, no cascade yet)**
+
+8. `ManualActivation_TwoBloomBurstBoosters_Triggers` — two adjacent
+   BloomBurst boosters, swap doesn't incidentally form an ordinary match;
+   assert triggered = true. (Also decides a tie-break: since both cells are
+   BloomBurst, use the second/target cell's row as the anchor, consistent
+   with the aimed convention established elsewhere.)
+9. `ManualActivation_MixedBoosterPair_DoesNotTrigger_FallsThrough` — one
+   BloomBurst + one non-BloomBurst booster adjacent, no incidental match;
+   assert triggered = false, proving Requirement 5c criterion 2's "only two
+   BloomBursts" carve-out isn't accidentally generalized to any booster pair.
+10. `ManualActivation_BoosterPlusRegularTile_Triggers_AimedAtRegularTile` —
+    a booster adjacent to a plain tile, no incidental match; assert
+    triggered = true and the cleared-cell set matches
+    `GetAffectedCellsAimed` called with the regular tile's position.
+11. `ManualActivation_BoosterPlusRegularTile_TriggersEvenWhenSwapWouldAlsoMatch`
+    — construct a case where the swap would *also* have formed an ordinary
+    match on its own; assert manual activation still fires rather than the
+    ordinary-match path taking precedence. This is the precedence test from
+    Requirement 5c's precedence note, and the one most likely to be missed
+    by an implementation that checks for an ordinary match first.
+12. `ManualActivation_TwoRegularTiles_NeverTriggers` — neither tile is a
+    booster; assert triggered = false unconditionally, regardless of match
+    outcome.
+13. `ManualActivation_NonAdjacentBoosterPair_DoesNotTrigger` and
+    `ManualActivation_OutOfBoundsBoosterPair_DoesNotTrigger` — two
+    BloomBursts that aren't adjacent, and an out-of-bounds coordinate pair;
+    assert triggered = false in both cases, proving the combo path respects
+    the same bounds/adjacency guards `SwapEngine.TrySwap` already enforces.
+
+**Layer 3 — end-to-end cascade integration**
+
+14. `ManualActivation_ResultFeedsFullCascadeLoop` — trigger a
+    BloomBurst+BloomBurst combo via the full path (`TryManualActivationSwap`
+    → `CascadeEngine.ResolveCascadeFrom`) on a board engineered so the
+    row-clear's gravity/refill creates a second cascading match; assert
+    `Rounds >= 2`, proving the manual-activation cleared-cell set genuinely
+    feeds the same loop as an ordinary match rather than a separate
+    one-shot path.
+15. `ManualActivation_CreditBagsOnClearedCellsAreCounted` — place a credit
+    bag on a cell the aimed effect will clear; assert
+    `CascadeResult.CreditBagsCollected` reflects it, guarding against the
+    new entry point accidentally bypassing Task 6's bag-counting logic.
+16. `OriginalGetAffectedCells_Unchanged_RegressionGuard` — re-run the 6
+    existing per-booster `GetAffectedCells` isolation tests from Task 5
+    unmodified. Not new behavior; re-asserting them in this same batch is
+    the proof that adding the `GetAffectedCellsAimed` overload didn't
+    disturb the original, already-verified path.
+

@@ -1,0 +1,81 @@
+diff --git a/specs/core-puzzle/requirements.md b/specs/core-puzzle/requirements.md
+index 15a250b..3e6b3ec 100644
+--- a/specs/core-puzzle/requirements.md
++++ b/specs/core-puzzle/requirements.md
+@@ -180,6 +180,76 @@ convention of documenting non-obvious calls rather than silently guessing):
+   color it formed from); nothing in the GDD suggests targeting a different
+   color.
+ 
++## Requirement 5c — Manual Booster Activation via Swap
++
++**User story:** As a player, I want to deliberately swap a booster tile
++instead of only having it activate by chance during a cascade, so boosters
++become a tool I can use intentionally, not just a byproduct of luck.
++
++Two distinct new swap outcomes, both bypassing `SwapEngine`'s normal
++"only commit if it creates a match" rule for these specific tile
++combinations. Scope decisions below were confirmed with the user directly
++(not GDD-derived, since the GDD doesn't address manual activation at all)
++and are recorded here rather than left implicit.
++
++**Acceptance criteria**
++
++1. WHEN a player swaps two adjacent tiles that are **both BloomBurst
++   boosters** THE SYSTEM SHALL commit the swap and immediately fire
++   BloomBurst's row-clear effect that same round, regardless of whether the
++   swap would otherwise form a match.
++2. IF a player swaps two adjacent booster tiles where **at least one is not
++   BloomBurst** (e.g. LeafWheel+LeafWheel, BloomBurst+TidalClear) THEN THE
++   SYSTEM SHALL fall through to normal `SwapEngine` rules — commit only if
++   the swap happens to form an ordinary match, otherwise revert. Explicitly
++   out of scope: no special combo effect for any booster pairing except two
++   BloomBursts specifically. (Confirmed with user: other booster-pair combos
++   were considered and deliberately excluded, not merely unspecified — may
++   get their own requirement later if wanted.)
++3. WHEN a player swaps a booster tile with an adjacent **non-booster**
++   tile THE SYSTEM SHALL commit the swap and immediately fire that
++   booster's own GDD §7.2 effect that same round, "aimed" through the
++   non-booster tile's board position instead of the booster's own original
++   position, regardless of whether the swap would otherwise form a match
++   (this takes precedence over an incidental ordinary match — see the
++   precedence note below):
++   - `BloomBurst` -> clears the **target tile's row** (not the booster's own
++     row)
++   - `LeafWheel` -> clears the **target tile's column**
++   - `TidalClear` -> 3x3 zone centered on the **target tile's position**,
++     clipped at board edges (same clipping rule as Requirement 5's
++     non-aimed version)
++   - `SolarFlare` -> all tiles matching the **target tile's color** (not the
++     booster's own color)
++   - `SporeCloud` -> unchanged from its normal effect (5 random tiles,
++     board-wide) — the target position has no bearing, since this effect
++     was never position-anchored to begin with
++   - `DeepSurge` -> unchanged from its normal effect (bottom two rows) —
++     this effect is anchored to the board's edge, not any tile's position,
++     so "aiming" doesn't apply
++4. WHEN either of the above manual-activation swaps triggers a booster
++   effect THE SYSTEM SHALL run the resulting cleared cells through the same
++   gravity/refill/re-scan cascade loop as any other clear (Requirement 4a),
++   including chaining into any further boosters the effect happens to
++   sweep up.
++
++**Precedence note:** criterion 3 explicitly fires regardless of whether the
++swap would also have formed an ordinary match on its own — manual
++activation is not a fallback checked only after an ordinary-match check
++fails. An implementation that checks for an ordinary match first and only
++falls back to manual activation when no match exists would violate this
++criterion; the two BloomBurst-pair and booster+regular-tile checks must run
++*before* (or independently of, with equal-or-higher priority than) the
++ordinary match check in `SwapEngine`.
++
++**Implementation note for whoever picks this up:** `BoosterActivation.
++GetAffectedCells` (Requirement 5) always reads the booster's own position
++and color — that behavior is correct and already verified, and should stay
++untouched. This requirement needs a second, separate code path (e.g. a
++`GetAffectedCellsAimed` overload taking an explicit target position/color)
++rather than a signature change, so Requirement 5's existing tests keep
++exercising the original, unmodified path.
++
+ ## Requirement 5b — Credit Wallet, Objectives, Lives *(future tasks)*
+ 
+ Credit bag collection into an actual player balance, level

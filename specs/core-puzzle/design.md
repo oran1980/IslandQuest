@@ -3,6 +3,23 @@
 Implements: `requirements.md` (Requirements 1–2 now; 3–4 stubbed for later
 tasks). Maps to GDD §11.1 folder layout and §11.2 class table.
 
+## 0. Target engine (tech notes)
+
+The GDD specifies "Unity 2023 LTS." **That version line no longer exists** —
+Unity's release model changed and went straight from the 2022 LTS line to
+Unity 6; there is no "2023 LTS." The current equivalent recommendation is
+**Unity 6.3 LTS** (2-year support window, through December 2027). This is a
+correction to an outdated fact in the source GDD, not a design choice — the
+GDD's actual intent ("use the current LTS release for stability") is
+unaffected, only the specific version number was stale.
+
+Practical implication: nothing in `Assets/Scripts/Match3/*.cs` depends on
+this either way (it's plain C#, zero `UnityEngine` references — see §1
+below), so this only matters once Task 9's `BoardController` and the Unity
+project itself are opened in the actual Editor. Install via Unity Hub,
+selecting Unity 6.3 LTS, not a bare/standalone installer, so version
+upgrades stay manageable.
+
 ## 1. Layering decision
 
 GDD §11.2 lists `BoardController` and `MatchFinder` as if they were one

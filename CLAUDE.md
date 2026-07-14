@@ -11,6 +11,13 @@ Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD
 folder — ask the user to re-upload it if you need to check something against
 the primary source that isn't already captured in `requirements.md`).
 
+**Repo**: `https://github.com/oran1980/IslandQuest` (public).
+
+**Target engine**: **Unity 6.3 LTS** — not "Unity 2023 LTS" as the original
+GDD states (that version line doesn't exist; see `design.md` §0 for the
+correction). Only relevant once Task 9's Unity project is opened in the
+actual Editor.
+
 ## Mandatory process — read these before writing any code
 
 1. **`specs/PROCESS.md`** — the RED → GREEN → REFACTOR → REVIEW cycle. This
