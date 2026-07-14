@@ -9,12 +9,14 @@ namespace IslandQuest.Match3
         public int Rounds { get; }
         public int BonusCredits { get; }
         public bool BonusBagDropped { get; }
+        public int CreditBagsCollected { get; }
 
-        public CascadeResult(int rounds, int bonusCredits, bool bonusBagDropped)
+        public CascadeResult(int rounds, int bonusCredits, bool bonusBagDropped, int creditBagsCollected)
         {
             Rounds = rounds;
             BonusCredits = bonusCredits;
             BonusBagDropped = bonusBagDropped;
+            CreditBagsCollected = creditBagsCollected;
         }
     }
 
@@ -90,6 +92,7 @@ namespace IslandQuest.Match3
         public static CascadeResult ResolveCascade(Board board, BoardConfig config, Random rng, int maxRounds = DefaultMaxRounds)
         {
             int rounds = 0;
+            int creditBagsCollected = 0;
 
             while (true)
             {
@@ -105,10 +108,8 @@ namespace IslandQuest.Match3
                         "clearing/refill rather than a legitimately long cascade.");
                 }
 
-                var clearedCells = new HashSet<(int Row, int Col)>();
-                foreach (var group in groups)
-                    foreach (var cell in group.Cells)
-                        clearedCells.Add(cell);
+                var clearedCells = DetermineClearedCells(board, groups, rng);
+                creditBagsCollected += CountClearedCreditBags(board, clearedCells);
 
                 ClearGravityRefill(board, clearedCells, config, rng);
                 rounds++;
@@ -119,7 +120,95 @@ namespace IslandQuest.Match3
             if (dropBag)
                 DropOneBonusBag(board, rng);
 
-            return new CascadeResult(rounds, bonusCredits, dropBag);
+            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected);
+        }
+
+        /// <summary>
+        /// Implements Requirement 5: for each match group, either spawns a
+        /// booster tile (booster-eligible groups keep one cell — the
+        /// topmost, then leftmost, per requirements.md's interpretation
+        /// note — instead of clearing it) or clears every cell normally.
+        /// Then repeatedly expands the cleared set for any already-cleared
+        /// cell that is itself a booster tile, via
+        /// <see cref="BoosterActivation.GetAffectedCells"/>, until a pass
+        /// finds no new booster to activate (chain reactions, criterion 3).
+        /// Mutates <paramref name="board"/> only to write newly-spawned
+        /// boosters onto their surviving cell; does not clear/refill —
+        /// that's still <see cref="ClearGravityRefill"/>'s job.
+        /// </summary>
+        public static HashSet<(int Row, int Col)> DetermineClearedCells(Board board, IReadOnlyList<MatchGroup> groups, Random rng)
+        {
+            var clearedCells = new HashSet<(int Row, int Col)>();
+
+            foreach (var group in groups)
+            {
+                if (group.IsBoosterEligible)
+                {
+                    var spawnCell = ChooseBoosterSpawnCell(group);
+                    board[spawnCell.Row, spawnCell.Col] = board[spawnCell.Row, spawnCell.Col].WithBooster(group.AwardedBooster);
+
+                    foreach (var cell in group.Cells)
+                        if (cell != spawnCell)
+                            clearedCells.Add(cell);
+                }
+                else
+                {
+                    foreach (var cell in group.Cells)
+                        clearedCells.Add(cell);
+                }
+            }
+
+            var processed = new HashSet<(int Row, int Col)>();
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                foreach (var cell in new List<(int Row, int Col)>(clearedCells))
+                {
+                    if (!processed.Add(cell))
+                        continue;
+
+                    if (board[cell.Row, cell.Col].Booster == BoosterType.None)
+                        continue;
+
+                    foreach (var affected in BoosterActivation.GetAffectedCells(board, cell.Row, cell.Col, rng))
+                        if (clearedCells.Add(affected))
+                            changed = true;
+                }
+            }
+
+            return clearedCells;
+        }
+
+        /// <summary>Topmost, then leftmost cell of the group — see requirements.md
+        /// Requirement 5's interpretation note for why this arbitrary-but-deterministic
+        /// tiebreak was chosen (the GDD doesn't specify a spawn position).</summary>
+        private static (int Row, int Col) ChooseBoosterSpawnCell(MatchGroup group)
+        {
+            (int Row, int Col) best = default;
+            bool first = true;
+
+            foreach (var cell in group.Cells)
+            {
+                if (first || cell.Row < best.Row || (cell.Row == best.Row && cell.Col < best.Col))
+                {
+                    best = cell;
+                    first = false;
+                }
+            }
+
+            return best;
+        }
+
+        private static int CountClearedCreditBags(Board board, IEnumerable<(int Row, int Col)> clearedCells)
+        {
+            int collected = 0;
+            foreach (var cell in clearedCells)
+            {
+                if (board[cell.Row, cell.Col].HasCreditBag)
+                    collected++;
+            }
+            return collected;
         }
 
         private static void DropOneBonusBag(Board board, Random rng)

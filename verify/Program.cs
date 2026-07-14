@@ -529,6 +529,361 @@ Run("Task4: ResolveCascade throws if maxRounds is exceeded (defensive cap)", () 
     Assert(threw, "expected ResolveCascade to throw when it can't finish within maxRounds");
 });
 
+Console.WriteLine("--- Task 5: Booster spawn & activation ---");
+
+Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>
+{
+    // Same fixture as Task2's "straight run of 4" test: row 0 is Leaf x4, rest matchless.
+    var board = new Board(4, 4);
+    var fill = new TileType[4, 4]
+    {
+        { TileType.Leaf,     TileType.Leaf,     TileType.Leaf,     TileType.Leaf },
+        { TileType.Wave,     TileType.Sun,      TileType.Coral,    TileType.Mushroom },
+        { TileType.Sun,      TileType.Coral,    TileType.Mushroom, TileType.Wave },
+        { TileType.Coral,    TileType.Mushroom, TileType.Wave,     TileType.Sun },
+    };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(fill[r, c]);
+
+    var groups = MatchResolver.FindMatchGroups(board);
+    var cleared = CascadeEngine.DetermineClearedCells(board, groups, new Random(1));
+
+    Assert(!cleared.Contains((0, 0)), "topmost-leftmost cell of the group should be kept as the booster tile, not cleared");
+    Assert(cleared.Contains((0, 1)) && cleared.Contains((0, 2)) && cleared.Contains((0, 3)), "the other 3 cells of the group should clear normally");
+    Assert(board[0, 0].Type == TileType.Leaf, "booster tile should keep its original TileType");
+    Assert(board[0, 0].Booster == BoosterType.LeafWheel, $"expected LeafWheel booster spawned, got {board[0, 0].Booster}");
+});
+
+Run("Task5: exactly-3 match does not spawn a booster", () =>
+{
+    var board = new Board(4, 4);
+    var fill = new TileType[4, 4]
+    {
+        { TileType.Sun,    TileType.Sun,    TileType.Sun,     TileType.Wave },
+        { TileType.Wave,   TileType.Leaf,   TileType.Coral,   TileType.Sun  },
+        { TileType.Leaf,   TileType.Wave,   TileType.Sun,     TileType.Coral },
+        { TileType.Coral,  TileType.Sun,    TileType.Wave,    TileType.Leaf },
+    };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(fill[r, c]);
+
+    var groups = MatchResolver.FindMatchGroups(board);
+    var cleared = CascadeEngine.DetermineClearedCells(board, groups, new Random(1));
+
+    Assert(cleared.Contains((0, 0)) && cleared.Contains((0, 1)) && cleared.Contains((0, 2)), "all 3 cells of a non-eligible match should clear");
+    Assert(board[0, 0].Booster == BoosterType.None && board[0, 1].Booster == BoosterType.None && board[0, 2].Booster == BoosterType.None,
+        "no booster should spawn from an exactly-3 match");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — BloomBurst clears the entire row", () =>
+{
+    var board = new Board(4, 5);
+    board[2, 2] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    var affected = BoosterActivation.GetAffectedCells(board, 2, 2, new Random(1));
+    Assert(affected.Count == 5, $"expected all 5 cells in row 2, got {affected.Count}");
+    for (int c = 0; c < 5; c++)
+        Assert(affected.Contains((2, c)), $"row 2 col {c} should be included");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — LeafWheel clears the entire column", () =>
+{
+    var board = new Board(5, 4);
+    board[2, 2] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    var affected = BoosterActivation.GetAffectedCells(board, 2, 2, new Random(1));
+    Assert(affected.Count == 5, $"expected all 5 cells in column 2, got {affected.Count}");
+    for (int r = 0; r < 5; r++)
+        Assert(affected.Contains((r, 2)), $"col 2 row {r} should be included");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — TidalClear clips a 3x3 zone at the corner", () =>
+{
+    var board = new Board(5, 5);
+    board[0, 0] = new Tile(TileType.Wave, BoosterType.TidalClear);
+    var affected = BoosterActivation.GetAffectedCells(board, 0, 0, new Random(1));
+    Assert(affected.Count == 4, $"corner 3x3 zone clipped to the board should be 2x2=4 cells, got {affected.Count}");
+    Assert(affected.Contains((0, 0)) && affected.Contains((0, 1)) && affected.Contains((1, 0)) && affected.Contains((1, 1)),
+        "expected exactly the 2x2 corner");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — SolarFlare clears every tile of the booster's own color", () =>
+{
+    var board = new Board(3, 3);
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            board[r, c] = new Tile((r + c) % 2 == 0 ? TileType.Sun : TileType.Wave);
+    board[1, 1] = new Tile(TileType.Sun, BoosterType.SolarFlare);
+
+    var affected = BoosterActivation.GetAffectedCells(board, 1, 1, new Random(1));
+    int expectedSunCount = 0;
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            if (board[r, c].Type == TileType.Sun) expectedSunCount++;
+
+    Assert(affected.Count == expectedSunCount, $"expected {expectedSunCount} Sun cells, got {affected.Count}");
+    for (int r = 0; r < 3; r++)
+        for (int c = 0; c < 3; c++)
+            if (board[r, c].Type == TileType.Sun)
+                Assert(affected.Contains((r, c)), $"Sun cell ({r},{c}) should be included");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — SporeCloud clears 5 distinct random cells", () =>
+{
+    var board = new Board(9, 9);
+    board[4, 4] = new Tile(TileType.Mushroom, BoosterType.SporeCloud);
+    var affected = BoosterActivation.GetAffectedCells(board, 4, 4, new Random(1));
+    Assert(affected.Count == 5, $"expected exactly 5 cells, got {affected.Count}");
+    foreach (var cell in affected)
+        Assert(board.InBounds(cell.Row, cell.Col), $"cell {cell} should be within board bounds");
+});
+
+Run("Task5: BoosterActivation.GetAffectedCells — DeepSurge clears the bottom two rows", () =>
+{
+    var board = new Board(6, 4);
+    board[3, 1] = new Tile(TileType.Coral, BoosterType.DeepSurge);
+    var affected = BoosterActivation.GetAffectedCells(board, 3, 1, new Random(1));
+    Assert(affected.Count == 8, $"expected 2 rows x 4 cols = 8 cells, got {affected.Count}");
+    for (int c = 0; c < 4; c++)
+    {
+        Assert(affected.Contains((4, c)), $"row 4 col {c} should be included");
+        Assert(affected.Contains((5, c)), $"row 5 col {c} should be included");
+    }
+});
+
+Run("Task5: chain reaction — clearing a booster tile activates it and any booster it in turn clears", () =>
+{
+    // (0,0) holds a BloomBurst booster (row clear). (0,3), also in row 0,
+    // holds a LeafWheel booster. Clearing (0,0) should activate BloomBurst
+    // (clearing the rest of row 0, including (0,3)'s LeafWheel), which
+    // should in turn activate and clear all of column 3.
+    var board = new Board(4, 4);
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(TileType.Sun); // filler, irrelevant to the chain itself
+    board[0, 0] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    board[0, 3] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+
+    var triggerGroup = new MatchGroup(TileType.Flower, new HashSet<(int Row, int Col)> { (0, 0) });
+    var cleared = CascadeEngine.DetermineClearedCells(board, new List<MatchGroup> { triggerGroup }, new Random(1));
+
+    for (int c = 0; c < 4; c++)
+        Assert(cleared.Contains((0, c)), $"BloomBurst should clear row 0 col {c}");
+    for (int r = 0; r < 4; r++)
+        Assert(cleared.Contains((r, 3)), $"chained LeafWheel should clear column 3 row {r}");
+});
+
+Run("Task5: ResolveCascade — a spawned booster tile survives its own round instead of being cleared", () =>
+{
+    var board = new Board(4, 4);
+    var fill = new TileType[4, 4]
+    {
+        { TileType.Leaf,     TileType.Leaf,     TileType.Leaf,     TileType.Leaf },
+        { TileType.Wave,     TileType.Sun,      TileType.Coral,    TileType.Mushroom },
+        { TileType.Sun,      TileType.Coral,    TileType.Mushroom, TileType.Wave },
+        { TileType.Coral,    TileType.Mushroom, TileType.Wave,     TileType.Sun },
+    };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(fill[r, c]);
+
+    var config = new BoardConfig(rows: 4, columns: 4, seed: 44);
+    CascadeEngine.ResolveCascade(board, config, new Random(44));
+
+    int boosterCount = 0;
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            if (board[r, c].Booster == BoosterType.LeafWheel) boosterCount++;
+
+    Assert(boosterCount == 1, $"expected exactly 1 surviving LeafWheel booster tile after resolving, got {boosterCount}");
+});
+
+Run("Task6: collecting a credit bag from a cleared match is reported in CascadeResult", () =>
+{
+    var board = new Board(4, 4);
+    var fill = new TileType[4, 4]
+    {
+        { TileType.Flower, TileType.Flower, TileType.Flower, TileType.Flower },
+        { TileType.Wave,   TileType.Sun,    TileType.Coral,   TileType.Mushroom },
+        { TileType.Sun,    TileType.Coral,   TileType.Mushroom,TileType.Wave },
+        { TileType.Coral,  TileType.Mushroom,TileType.Wave,   TileType.Sun },
+    };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(fill[r, c]);
+
+    board[0, 1] = board[0, 1].WithCreditBag(true);
+    var config = new BoardConfig(rows: 4, columns: 4, seed: 50);
+    var result = CascadeEngine.ResolveCascade(board, config, new Random(50));
+
+    Assert(result.CreditBagsCollected == 1,
+        $"expected 1 collected bag from the cleared match, got {result.CreditBagsCollected}");
+});
+
+Run("Task6: a bonus bag drop from a 3+ round chain is added to the board without losing collected bags", () =>
+{
+    var board = new Board(7, 3);
+    var col1 = new TileType[] { TileType.Leaf, TileType.Leaf, TileType.Flower, TileType.Flower, TileType.Flower, TileType.Leaf, TileType.Coral };
+    for (int r = 0; r < 7; r++)
+    {
+        board[r, 0] = new Tile(r % 2 == 0 ? TileType.Coral : TileType.Mushroom);
+        board[r, 1] = new Tile(col1[r]);
+        board[r, 2] = new Tile(r % 2 == 0 ? TileType.Mushroom : TileType.Coral);
+    }
+
+    board[2, 1] = board[2, 1].WithCreditBag(true);
+    board[3, 1] = board[3, 1].WithCreditBag(true);
+
+    var config = new BoardConfig(rows: 7, columns: 3, seed: 60);
+    int bagsBefore = CountBags(board);
+    var result = CascadeEngine.ResolveCascade(board, config, new Random(60));
+    int bagsAfter = CountBags(board);
+
+    Assert(result.Rounds >= 2, "expected the engineered board to produce a cascade");
+    Assert(result.CreditBagsCollected >= 1, "expected at least one bag to be collected during the cascade");
+    Assert(bagsAfter == bagsBefore - result.CreditBagsCollected + (result.BonusBagDropped ? 1 : 0),
+        "board bag count after cascade should equal initial bags minus collected plus any bonus bag dropped");
+});
+
+Console.WriteLine("--- Task 7: Level objective, completion, and star rating ---");
+
+Run("Task7: score objective completes when score threshold is reached", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 50);
+    var thresholds = new LevelStarThresholds(oneStar: 20, twoStar: 35, threeStar: 55);
+    var progress = new LevelProgress(score: 52, collected: 0, remainingCount: 5);
+
+    var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
+
+    Assert(result.IsComplete, "score objective should be complete when score meets the target");
+    Assert(result.Stars == 2, $"expected 2 stars for score 52 with thresholds 20/35/55, got {result.Stars}");
+    Assert(result.CreditPayout == 35, $"expected 35 credit payout for 2 stars, got {result.CreditPayout}");
+});
+
+Run("Task7: collect objective completes when collected items meet the target", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Collect, target: 10);
+    var thresholds = new LevelStarThresholds(oneStar: 10, twoStar: 20, threeStar: 30);
+    var progress = new LevelProgress(score: 0, collected: 10, remainingCount: 2);
+
+    var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
+
+    Assert(result.IsComplete, "collect objective should be complete when collected count reaches target");
+    Assert(result.Stars == 1, $"expected 1 star for collected 10 with thresholds 10/20/30, got {result.Stars}");
+    Assert(result.CreditPayout == 20, $"expected 20 credit payout for 1 star, got {result.CreditPayout}");
+});
+
+Run("Task7: clear-board objective completes only when remaining count is zero", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.ClearBoard, target: 0);
+    var thresholds = new LevelStarThresholds(oneStar: 10, twoStar: 20, threeStar: 30);
+    var progress = new LevelProgress(score: 75, collected: 0, remainingCount: 0);
+
+    var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
+
+    Assert(result.IsComplete, "clear-board objective should be complete when remaining count is zero");
+    Assert(result.Stars == 3, $"expected 3 stars for score 75 with thresholds 10/20/30, got {result.Stars}");
+    Assert(result.CreditPayout == 55, $"expected 55 credit payout for 3 stars, got {result.CreditPayout}");
+});
+
+Run("Task7: incomplete objective returns zero stars and zero payout", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 100);
+    var thresholds = new LevelStarThresholds(oneStar: 20, twoStar: 40, threeStar: 60);
+    var progress = new LevelProgress(score: 50, collected: 0, remainingCount: 1);
+
+    var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
+
+    Assert(!result.IsComplete, "objective should not be complete when progress is below the target");
+    Assert(result.Stars == 0, $"expected 0 stars for incomplete objective, got {result.Stars}");
+    Assert(result.CreditPayout == 0, $"expected 0 credit payout for incomplete objective, got {result.CreditPayout}");
+});
+
+Console.WriteLine("--- Task 8: Lives (Hearts) system ---");
+
+Run("Task8: constructor enforces positive max and current bounds", () =>
+{
+    Assert(new HeartSystem(5).MaxHearts == 5, "default max hearts should be 5");
+    Assert(new HeartSystem(0, maxHearts: 3).CurrentHearts == 0, "current hearts can be zero");
+});
+
+Run("Task8: losing a heart decrements and schedules regeneration", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(3, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30));
+    var next = hearts.LoseHeart(now);
+
+    Assert(next.CurrentHearts == 2, "losing a heart should decrement current hearts");
+    Assert(next.NextHeartAt.HasValue, "losing a heart below max should schedule a next heart time");
+    Assert(next.GetTimeUntilNextHeart(now) == TimeSpan.FromMinutes(30), "next heart time should be exactly one interval away immediately after losing a heart");
+});
+
+Run("Task8: losing a heart at zero stays at zero and schedules regeneration", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(0, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30));
+    var next = hearts.LoseHeart(now);
+
+    Assert(next.CurrentHearts == 0, "current hearts should remain at zero when losing a heart with none left");
+    Assert(next.NextHeartAt.HasValue, "regeneration should still be scheduled when hearts reach zero");
+});
+
+Run("Task8: regeneration before next heart does nothing", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(3, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30), nextHeartAt: now + TimeSpan.FromMinutes(15));
+    var next = hearts.Regenerate(now + TimeSpan.FromMinutes(10));
+
+    Assert(next.CurrentHearts == 3, "regeneration should not increase hearts before the interval elapses");
+    Assert(next.NextHeartAt == hearts.NextHeartAt, "next heart time should remain unchanged before regeneration occurs");
+});
+
+Run("Task8: regeneration restores one heart after exact interval", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(2, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30), nextHeartAt: now + TimeSpan.FromMinutes(30));
+    var next = hearts.Regenerate(now + TimeSpan.FromMinutes(30));
+
+    Assert(next.CurrentHearts == 3, "one heart should restore after a single interval");
+    Assert(next.NextHeartAt.HasValue, "next heart time should still be scheduled after restoring below max");
+});
+
+Run("Task8: regeneration caps at max hearts and clears next heart time", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(4, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30), nextHeartAt: now + TimeSpan.FromMinutes(30));
+    var next = hearts.Regenerate(now + TimeSpan.FromMinutes(90));
+
+    Assert(next.CurrentHearts == 5, "regeneration should cap hearts at max");
+    Assert(next.NextHeartAt == null, "next heart time should be cleared once max hearts are reached");
+});
+
+Run("Task8: time until next heart returns zero when due", () =>
+{
+    var now = DateTimeOffset.UtcNow;
+    var hearts = new HeartSystem(2, maxHearts: 5, regenInterval: TimeSpan.FromMinutes(30), nextHeartAt: now);
+    Assert(hearts.GetTimeUntilNextHeart(now) == TimeSpan.Zero, "time until next heart should be zero when now is at or past next heart time");
+});
+
+Console.WriteLine("--- Task 10: ScriptableObject level data for Island 1, Levels 1-5 ---");
+
+Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
+{
+    var levels = LevelData.Island1Levels;
+    Assert(levels.Count == 5, $"expected 5 Island 1 levels, got {levels.Count}");
+
+    for (int index = 0; index < levels.Count; index++)
+    {
+        var level = levels[index];
+        Assert(level.Island == 1, $"level {index + 1}: expected island 1, got {level.Island}");
+        Assert(level.LevelNumber == index + 1, $"level {index + 1}: expected level number {index + 1}, got {level.LevelNumber}");
+        Assert(level.MoveLimit > 0, $"level {index + 1}: move limit must be positive");
+        Assert(level.AllowedTileTypes.Length >= 3, $"level {index + 1}: must allow at least 3 tile types");
+        Assert(level.MinInitialCreditBags >= 0, $"level {index + 1}: min initial credit bags must be non-negative");
+        Assert(level.MaxInitialCreditBags >= level.MinInitialCreditBags, $"level {index + 1}: max initial credit bags must be >= min");
+    }
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 

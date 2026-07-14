@@ -228,6 +228,40 @@ tasks.md Task 4's correction note for the first):
   50 rounds from one swap is not a real scenario with 6 tile types on a 9x9
   board.
 
+### 3.5 Booster spawn & activation (`BoosterActivation`, `CascadeEngine.DetermineClearedCells`, Task 5)
+
+Implements Requirement 5. Two new pieces, each independently testable:
+
+- **`BoosterActivation.GetAffectedCells(board, row, col, rng)`** — pure
+  (read-only) function mapping a booster tile's `BoosterType` + position to
+  the extra cells its effect designates, per the GDD §7.2 table in
+  requirements.md. No board mutation, so every one of the 6 cases is unit
+  tested directly against a hand-built board with no `CascadeEngine`
+  involvement at all.
+- **`CascadeEngine.DetermineClearedCells(board, groups, rng)`** — extracted
+  from `ResolveCascade`'s inline set-building (same pattern as Task 4
+  extracting `ClearGravityRefill` for independent testability). For each
+  `MatchGroup`: if booster-eligible, mutate the board so its spawn cell
+  (topmost, then leftmost — see requirements.md's interpretation note) picks
+  up `AwardedBooster` and is excluded from the cleared set; every other
+  group cell clears normally. Then it repeatedly scans the accumulated
+  cleared set for any cell that is itself a booster tile not yet processed,
+  and unions in `BoosterActivation.GetAffectedCells` for it — a fixed-point
+  loop so a chain of boosters clearing other boosters (Requirement 5
+  criterion 3) resolves correctly, however deep. `ResolveCascade` calls this
+  once per round in place of its old flat union-of-cells step; nothing else
+  about the round loop changes.
+
+**Known edge case, not specially handled:** if a booster-eligible group's
+chosen spawn cell (topmost-leftmost) happens to already hold a *different*
+pre-existing booster tile, that old booster is silently overwritten rather
+than activated. This requires two boosters to end up 4-directionally
+adjacent/connected in the same color group, which is rare, and the fix
+(prefer a non-booster cell as the spawn point, if the group has one) is
+straightforward if it turns out to matter — flagging here rather than
+building it speculatively, per the project's stated style of not solving
+problems that can't yet be observed to occur.
+
 ### Design correction log
 
 - Booster eligibility (§2): corrected from a speculative shape-based theory

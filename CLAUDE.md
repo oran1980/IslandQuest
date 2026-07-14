@@ -29,11 +29,12 @@ the primary source that isn't already captured in `requirements.md`).
 
 ## Current status
 
-Tasks 1–4 done (board generation, match detection/grouping, swap
-validation, cascade/gravity/combo loop). **Next: Task 5 — booster
-activation effects** (row/column/3×3-zone/one-color/5-random/bottom-two-rows
-clears per GDD §7.2). See `tasks.md` for the full remaining list (Tasks
-5–10).
+Tasks 1–5 done (board generation, match detection/grouping, swap
+validation, cascade/gravity/combo loop, booster spawn & activation —
+row/column/3×3-zone/one-color/5-random/bottom-two-rows clears per GDD §7.2,
+mapping obtained from the user and now recorded in `requirements.md`'s
+Requirement 5). **Next: Task 6 — credit bag collection & mid-level spawns.**
+See `tasks.md` for the full remaining list (Tasks 6–10).
 
 One open item from Task 4's review: `CascadeEngine.ClearGravityRefill`
 destroys credit-bag info on cleared cells with no record kept. Task 6 will

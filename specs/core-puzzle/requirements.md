@@ -118,10 +118,71 @@ combo skill is recognized.
 7. WHEN resolution finishes THE SYSTEM SHALL leave no empty cells on the
    board (every column fully refilled).
 
-## Requirement 4b — Boosters, Credit Wallet, Objectives, Lives *(future tasks)*
+## Requirement 5 — Booster Spawn & Activation
 
-Booster activation effects (GDD §7.2), credit bag collection into an actual
-player balance, level objective/star-rating payout (GDD §6.2), and the
-Lives/Hearts system (GDD §7.4) are specified in `tasks.md` as Tasks 5–8 and
-will get their acceptance criteria added to this document when each task
-starts.
+**User story:** As a player, when I match 4 or more tiles of one color, I want
+a booster tile to appear that can later clear a whole row, column, zone, or
+color, so bigger matches feel more rewarding and give me a tool for tough
+boards.
+
+Source for the color -> effect table: GDD §7.2 "Tile Elements & Boosters"
+(re-supplied by the user in-conversation since the .docx isn't in this repo;
+transcribed verbatim below).
+
+| Element  | Booster      | Effect                            |
+|----------|--------------|------------------------------------|
+| Flower   | BloomBurst   | Clears entire row                  |
+| Leaf     | LeafWheel    | Clears full column                 |
+| Wave     | TidalClear   | Removes 3x3 zone                   |
+| Sun      | SolarFlare   | Removes all tiles of one color     |
+| Mushroom | SporeCloud   | Removes 5 random tiles             |
+| Coral    | DeepSurge    | Clears bottom two rows             |
+
+**Acceptance criteria**
+1. WHEN a `MatchGroup` is booster-eligible (`Size >= 4`) THE SYSTEM SHALL
+   leave exactly one of its cells on the board as a booster tile (same
+   `TileType`, `Booster` set to `MatchGroup.AwardedBooster`) instead of
+   clearing it, and clear every other cell in the group normally in the same
+   round.
+2. WHEN a booster tile is included in the set of cells cleared during any
+   cascade round (matched again later, whether by a normal match or as part
+   of another booster-eligible group) THE SYSTEM SHALL, in that same round,
+   also clear the cells its effect designates per the table above:
+   `BloomBurst` -> the booster's entire row; `LeafWheel` -> the booster's
+   entire column; `TidalClear` -> the 3x3 zone centered on the booster,
+   clipped at board edges; `SolarFlare` -> every board cell whose `TileType`
+   equals the booster's own type; `SporeCloud` -> 5 additional cells chosen
+   at random from anywhere on the board; `DeepSurge` -> every cell in the
+   bottom two rows of the board.
+3. WHEN a booster's activation clears a cell that itself holds another
+   booster tile THE SYSTEM SHALL activate that booster too, continuing until
+   no newly-added cell in that round's cleared set is an unactivated booster
+   (chain reaction, still counted as one cascade round).
+4. IF a booster's designated cells exceed what the board actually has (e.g.
+   `TidalClear` near a corner, `SolarFlare` when few tiles share that color)
+   THEN THE SYSTEM SHALL clip/clear only cells that exist, without error.
+5. Booster activation only expands which cells are cleared within the
+   current cascade round; it does not by itself add an extra round to
+   `CascadeResult.Rounds` — gravity/refill and any resulting new matches are
+   still handled by the existing Requirement 4a loop.
+
+**Interpretation notes** (not literal GDD text — flagged per this project's
+convention of documenting non-obvious calls rather than silently guessing):
+- Which cell in a booster-eligible group keeps the booster ("spawn cell")
+  isn't specified by the GDD. This spec picks the topmost, then leftmost
+  cell in the group — deterministic, independent of RNG or `HashSet`
+  iteration order.
+- "Activation" triggers when the booster tile is cleared again later (as
+  part of any match), not immediately upon spawn — standard genre
+  convention, and consistent with the GDD listing "spawn" and "activation
+  effects" as two separate ideas.
+- `SolarFlare`'s "one color" is read as the booster's own `TileType` (the
+  color it formed from); nothing in the GDD suggests targeting a different
+  color.
+
+## Requirement 5b — Credit Wallet, Objectives, Lives *(future tasks)*
+
+Credit bag collection into an actual player balance, level
+objective/star-rating payout (GDD §6.2), and the Lives/Hearts system (GDD
+§7.4) are specified in `tasks.md` as Tasks 6–8 and will get their acceptance
+criteria added to this document when each task starts.
