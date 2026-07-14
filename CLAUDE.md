@@ -36,17 +36,25 @@ actual Editor.
 
 ## Current status
 
-Tasks 1–5 done (board generation, match detection/grouping, swap
-validation, cascade/gravity/combo loop, booster spawn & activation —
-row/column/3×3-zone/one-color/5-random/bottom-two-rows clears per GDD §7.2,
-mapping obtained from the user and now recorded in `requirements.md`'s
-Requirement 5). **Next: Task 6 — credit bag collection & mid-level spawns.**
-See `tasks.md` for the full remaining list (Tasks 6–10).
+All engine (non-Unity) tasks done: Tasks 1–8, 10, and 11. The `verify/`
+suite is **67 passed, 0 failed**. Task 11 (manual booster activation via
+swap — `BoosterActivation.GetAffectedCellsAimed`,
+`SwapEngine.TryManualActivationSwap`/`ManualSwapResult`,
+`CascadeEngine.ResolveCascadeFrom`) is complete with full RED/GREEN/REVIEW
+(see `tasks.md` "How Task 11 was verified").
 
-One open item from Task 4's review: `CascadeEngine.ClearGravityRefill`
-destroys credit-bag info on cleared cells with no record kept. Task 6 will
-need to read `MatchGroup.Cells` for `HasCreditBag` *before* calling
-`ClearGravityRefill`, not after. Documented in `tasks.md` under Task 4.
+**Only remaining item: Task 9 (`BoardController`) — code complete but marked
+`[~]`, not `[x]`.** The code is written and integrated (it now routes drag
+input through the manual-activation path before falling back to `TrySwap`),
+but it's a `UnityEngine` MonoBehaviour, so it can only be compiled/run inside
+the Unity Editor — which the `verify/` harness deliberately excludes. The
+outstanding step is a manual Editor playtest in Unity 6.3 LTS. See `tasks.md`
+Task 9 for exactly what to confirm in-Editor.
+
+Running the suite: this machine has no standalone `dotnet` on PATH, but the
+Unity install bundles the matching SDK (8.0.318). Run with:
+`DOTNET_ROOT="/Applications/Unity/Hub/Editor/6000.5.3f1/Unity.app/Contents/Resources/Scripting/DotNetSdk" PATH="$DOTNET_ROOT:$PATH" dotnet run`
+from `verify/`.
 
 ## Key architecture facts
 

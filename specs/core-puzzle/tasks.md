@@ -114,11 +114,25 @@ end state, so this is auditable rather than asserted.
     scope here — this task only owns heart-count business logic).
   - _Verification: extends `verify/Program.cs` with lose-heart and regen tests._
 
-- [ ] **9. Unity presentation layer — `BoardController`**
+- [~] **9. Unity presentation layer — `BoardController`** *(code complete;
+    Editor playtest pending)*
   - MonoBehaviour wrapping the now-stable core: tile prefab spawn/animate,
-    drag input → `Board.TrySwap`, visual cascade playback.
+    drag input → `SwapEngine.TrySwap`, visual cascade playback. Now also
+    routes drag input through `SwapEngine.TryManualActivationSwap` →
+    `CascadeEngine.ResolveCascadeFrom` first (Requirement 5c precedence,
+    design.md §3.6 composition), falling through to `TrySwap` only when no
+    manual activation fires.
   - First task that's allowed to reference `UnityEngine`.
   - _Implementation: `Assets/Scripts/BoardController.cs` and `Assets/Scripts/BoardTileView.cs`._
+  - _Verification status: the code is written and internally consistent with
+    the now-final core API (which is fully covered by the green `verify/`
+    suite), but because it is a `UnityEngine`-dependent MonoBehaviour it can
+    only be compiled/run inside the Unity Editor — which isn't runnable in
+    this headless environment (`verify/` deliberately excludes UnityEngine
+    files). Left as `[~]` rather than `[x]`: the remaining step is a manual
+    Editor playtest (open the project in Unity 6.3 LTS, press Play, confirm
+    tile spawn, drag-swap, cascade playback, and a manual booster swap all
+    behave). No auto-verification claim is made for this task._
 
 - [x] **10. `ScriptableObject` level data for Island 1, Levels 1-5**
   - `LevelData` asset definitions (objective, move limit, allowed tile
@@ -126,7 +140,7 @@ end state, so this is auditable rather than asserted.
     synthetic test boards.
   - _Implementation: `Assets/Scripts/Match3/LevelData.cs` and `Assets/Scripts/LevelDataAsset.cs`._
 
-- [ ] **11. Manual booster activation via swap**
+- [x] **11. Manual booster activation via swap**
   - Two new swap outcomes, both bypassing `SwapEngine`'s normal
     only-commit-if-match rule: (a) swapping two adjacent **BloomBurst**
     boosters together fires BloomBurst's row-clear immediately; (b) swapping
@@ -150,9 +164,14 @@ end state, so this is auditable rather than asserted.
     `MatchResolver`, so manual activations reuse the same cascade machinery
     as ordinary matches).
   - _Satisfies: Requirement 5c (all criteria)._
-  - _Verification: planned RED test list below — not yet implemented, so
-    not yet run. See "Planned RED tests for Task 11" at the end of this
-    file._
+  - _Verification: implemented and run — see "How Task 11 was verified"
+    below. The pre-written plan is preserved under "Planned RED tests for
+    Task 11" for the audit trail._
+  - _Final symbol names (matched the proposal): `BoosterActivation.
+    GetAffectedCellsAimed(board, booster, targetRow, targetCol, targetColor,
+    rng)`, `SwapEngine.TryManualActivationSwap(...)` returning a new
+    `ManualSwapResult { Triggered, ClearedCells }`, and `CascadeEngine.
+    ResolveCascadeFrom(board, initialClearedCells, config, rng)`._
 
 ---
 
@@ -345,7 +364,75 @@ Specific checks:
   the board once cascading settles, rather than being cleared along with
   the rest of its group.
 
-## Planned RED tests for Task 11 (not yet implemented — no production code exists for these symbols yet)
+## How Task 11 was verified (strict TDD: RED confirmed before any production code)
+
+Implemented against the pre-written plan below (kept intact as the audit
+trail). Baseline before starting: 50 passed, 0 failed.
+
+1. RED step: added 17 tests to `verify/Program.cs` (the 16 planned +
+   1 review-driven, see step 4) referencing `BoosterActivation.
+   GetAffectedCellsAimed`, `SwapEngine.TryManualActivationSwap`/
+   `ManualSwapResult`, and `CascadeEngine.ResolveCascadeFrom` — none of which
+   existed. Ran and confirmed a compile failure first: `CS0117:
+   'BoosterActivation' does not contain a definition for 'GetAffectedCellsAimed'`,
+   `CS0117: 'SwapEngine' does not contain a definition for
+   'TryManualActivationSwap'`, and `CS0117: 'CascadeEngine' does not contain
+   a definition for 'ResolveCascadeFrom'` (plus knock-on `CS0019` on `.Count`
+   against the resulting method groups). The build failed, as required.
+2. GREEN step:
+   - `BoosterActivation`: extracted the existing GDD §7.2 switch into a
+     private `ComputeEffect(board, booster, row, col, color, rng)`; the
+     original `GetAffectedCells` now delegates to it reading the booster
+     tile's own position/color, and the new `GetAffectedCellsAimed` delegates
+     to it with an explicit target position + color. The only behavioral
+     change to the shared body was reading SolarFlare's color from the
+     `color` parameter instead of `tile.Type` — identical for the original
+     caller, retargetable for the aimed one.
+   - `SwapEngine.TryManualActivationSwap` + `ManualSwapResult`: bounds/
+     adjacency guards, then condition 1 (both BloomBurst → aimed row-clear on
+     the target cell, tie-break per design.md §3.6) and condition 2 (exactly
+     one booster ^ one non-booster → booster's effect aimed through the
+     non-booster's position/color). Both commit the swap and never consult
+     the ordinary-match check, satisfying Requirement 5c's precedence note.
+     Every other combination returns `NotTriggered` without touching the
+     board.
+   - `CascadeEngine.ResolveCascadeFrom`: extracted the fixed-point booster
+     chain-expansion out of `DetermineClearedCells` into a shared private
+     `ExpandBoosterChain` (REFACTOR — Task 5/6 tests stayed green, proving
+     the extraction was behavior-preserving), then built the new entry point
+     to run a provided cleared set through chain-expansion + bag-counting +
+     gravity/refill as round 1, then continue the identical loop as
+     `ResolveCascade`. An empty initial set degrades to `ResolveCascade`
+     behavior.
+   - Full suite re-run: 66 passed, 0 failed (no regressions in Tasks 1–10).
+3. REVIEW pass — re-read all three changed core files against Requirement
+   5c's four criteria one at a time:
+   - Criterion 1 (two BloomBursts): covered, incl. the target-row tie-break
+     via a vertical-swap test asserting the *source* row is untouched.
+   - Criterion 2 (mixed booster pair falls through): covered for both
+     BloomBurst+other and other+other booster pairs.
+   - Criterion 3 (booster + non-booster, aimed, precedence): covered incl.
+     the explicit "swap would also form an ordinary match, manual still
+     fires" precedence test.
+   - Criterion 4 (feeds the same cascade loop, chains): covered by the
+     telescoping end-to-end test (`Rounds >= 2`) and the credit-bag test.
+   - Found one real issue and fixed it: an aimed **SolarFlare** on a
+     booster+regular swap lands the booster on the target cell, but the aimed
+     effect clears the *target* color — which usually isn't the booster's own
+     color — so the spent booster tile would have survived on the board, and
+     if left as a booster, the chain-expansion would have re-fired it against
+     its *own* color (contradicting criterion 3). Fixed by having
+     `TryManualActivationSwap` **consume** the fired booster: drop its booster
+     flag *and* add its cell to the cleared set, so it always leaves the board
+     and never re-chains. Added a dedicated regression test
+     ("an aimed SolarFlare is consumed and does not chain into its own
+     color") — this is the +1 beyond the 16 planned.
+   - Re-ran after the fix: **67 passed, 0 failed.** A second review pass over
+     the diff found nothing further.
+
+Below is the original pre-written plan, kept verbatim for the record.
+
+## Planned RED tests for Task 11 (as written before implementation)
 
 This is a pre-written test plan, not a verification record — nothing below
 has been run. Per this project's TDD process (see the methodology note at

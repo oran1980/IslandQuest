@@ -884,11 +884,271 @@ Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
     }
 });
 
+Console.WriteLine("--- Task 11: Manual booster activation via swap (Requirement 5c) ---");
+
+// Layer 1 — BoosterActivation.GetAffectedCellsAimed (pure, isolated)
+
+Run("Task11: Aimed BloomBurst clears the target's row, not the booster's own row", () =>
+{
+    var board = FillerBoard(5, 5);
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.BloomBurst, targetRow: 3, targetCol: 2, targetColor: board[3, 2].Type, rng: new Random(1));
+
+    Assert(cells.Count == 5, $"expected 5 cells for a 5-wide target row, got {cells.Count}");
+    for (int c = 0; c < 5; c++)
+        Assert(cells.Contains((3, c)), $"expected target row cell (3,{c}) to be affected");
+    for (int c = 0; c < 5; c++)
+        Assert(!cells.Contains((0, c)), $"booster's own row (0,{c}) must not be affected by an aimed BloomBurst");
+});
+
+Run("Task11: Aimed LeafWheel clears the target's column", () =>
+{
+    var board = FillerBoard(5, 5);
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.LeafWheel, targetRow: 1, targetCol: 4, targetColor: board[1, 4].Type, rng: new Random(1));
+
+    Assert(cells.Count == 5, $"expected 5 cells for a 5-tall target column, got {cells.Count}");
+    for (int r = 0; r < 5; r++)
+        Assert(cells.Contains((r, 4)), $"expected target column cell ({r},4) to be affected");
+});
+
+Run("Task11: Aimed TidalClear is a 3x3 around the target, clipped at a board corner", () =>
+{
+    var board = FillerBoard(5, 5);
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.TidalClear, targetRow: 0, targetCol: 0, targetColor: board[0, 0].Type, rng: new Random(1));
+
+    Assert(cells.Count == 4, $"expected 4 cells for a corner-clipped 3x3, got {cells.Count}");
+    foreach (var expected in new[] { (0, 0), (0, 1), (1, 0), (1, 1) })
+        Assert(cells.Contains(expected), $"expected corner-clipped cell {expected} to be affected");
+});
+
+Run("Task11: Aimed SolarFlare reads the target's color, not the booster's own color", () =>
+{
+    var board = FillerBoard(4, 4);
+    // Explicit colors: Flower is the target color; Sun stands in for the booster's own color.
+    board[0, 0] = new Tile(TileType.Flower);
+    board[2, 3] = new Tile(TileType.Flower);
+    board[1, 1] = new Tile(TileType.Sun);
+    board[3, 3] = new Tile(TileType.Sun);
+
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.SolarFlare, targetRow: 0, targetCol: 0, targetColor: TileType.Flower, rng: new Random(1));
+
+    Assert(cells.Contains((0, 0)) && cells.Contains((2, 3)), "aimed SolarFlare should include every target-color (Flower) cell");
+    Assert(!cells.Contains((1, 1)) && !cells.Contains((3, 3)), "aimed SolarFlare must not include booster-color (Sun) cells");
+    foreach (var cell in cells)
+        Assert(board[cell.Row, cell.Col].Type == TileType.Flower, $"cell {cell} is not the target color");
+});
+
+Run("Task11: Aimed SolarFlare gives identical results across calls (color read is stable)", () =>
+{
+    var board = FillerBoard(4, 4);
+    board[0, 0] = new Tile(TileType.Flower);
+    board[2, 3] = new Tile(TileType.Flower);
+
+    var first = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.SolarFlare, 0, 0, TileType.Flower, new Random(1));
+    var second = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.SolarFlare, 0, 0, TileType.Flower, new Random(1));
+    Assert(SameCells(first, second), "aimed SolarFlare should be deterministic with no mutation between calls");
+});
+
+Run("Task11: Aimed SporeCloud ignores the target and clears 5 distinct in-bounds cells", () =>
+{
+    var board = FillerBoard(5, 5);
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.SporeCloud, targetRow: 2, targetCol: 2, targetColor: board[2, 2].Type, rng: new Random(3));
+
+    Assert(cells.Count == 5, $"expected exactly 5 SporeCloud cells, got {cells.Count}");
+    foreach (var cell in cells)
+        Assert(board.InBounds(cell.Row, cell.Col), $"SporeCloud produced out-of-bounds cell {cell}");
+});
+
+Run("Task11: Aimed DeepSurge ignores the target and clears both bottom rows", () =>
+{
+    var board = FillerBoard(5, 5);
+    var cells = BoosterActivation.GetAffectedCellsAimed(board, BoosterType.DeepSurge, targetRow: 0, targetCol: 0, targetColor: board[0, 0].Type, rng: new Random(1));
+
+    Assert(cells.Count == 10, $"expected 10 cells (2 bottom rows x 5 cols), got {cells.Count}");
+    for (int c = 0; c < 5; c++)
+    {
+        Assert(cells.Contains((3, c)) && cells.Contains((4, c)), $"expected bottom-two-rows cell in column {c}");
+    }
+    Assert(!cells.Contains((0, 0)), "DeepSurge must not be influenced by the target position");
+});
+
+// Layer 2 — SwapEngine.TryManualActivationSwap (orchestration decision)
+
+Run("Task11: two adjacent BloomBursts trigger, anchored on the target cell's row", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[1, 3] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    board[2, 3] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+
+    // Swap source (1,3) with target (2,3): tie-break should pick the target row (2), not source row (1).
+    var res = SwapEngine.TryManualActivationSwap(board, 1, 3, 2, 3, new Random(1));
+
+    Assert(res.Triggered, "two adjacent BloomBursts should trigger manual activation");
+    for (int c = 0; c < 5; c++)
+        Assert(res.ClearedCells.Contains((2, c)), $"expected target row cell (2,{c}) cleared");
+    Assert(!res.ClearedCells.Contains((1, 0)), "source cell's row must not be the anchor (tie-break picks target row)");
+});
+
+Run("Task11: a mixed booster pair does not trigger (falls through)", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[2, 1] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    board[2, 2] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    var mixed = SwapEngine.TryManualActivationSwap(board, 2, 1, 2, 2, new Random(1));
+    Assert(!mixed.Triggered, "BloomBurst + non-BloomBurst booster must not trigger the combo");
+
+    board[3, 1] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    board[3, 2] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    var twoLeaf = SwapEngine.TryManualActivationSwap(board, 3, 1, 3, 2, new Random(1));
+    Assert(!twoLeaf.Triggered, "two non-BloomBurst boosters must not trigger the combo");
+});
+
+Run("Task11: booster + regular tile triggers, aimed through the regular tile's position", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[2, 2] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    // (2,3) is a plain filler tile — the "target" the booster is aimed through.
+    var res = SwapEngine.TryManualActivationSwap(board, 2, 2, 2, 3, new Random(1));
+
+    Assert(res.Triggered, "booster + non-booster swap should trigger manual activation");
+    Assert(res.ClearedCells.Count == 5, $"LeafWheel aimed at column 3 should clear 5 cells, got {res.ClearedCells.Count}");
+    for (int r = 0; r < 5; r++)
+        Assert(res.ClearedCells.Contains((r, 3)), $"expected aimed column cell ({r},3) cleared");
+});
+
+Run("Task11: booster + regular triggers even when the swap would also form an ordinary match", () =>
+{
+    var board = FillerBoard(5, 5);
+    // Set up so swapping the booster out of (0,2) drops a Wave there, forming Wave-Wave-Wave across row 0.
+    board[0, 0] = new Tile(TileType.Wave);
+    board[0, 1] = new Tile(TileType.Wave);
+    board[0, 2] = new Tile(TileType.Leaf, BoosterType.LeafWheel);
+    board[0, 3] = new Tile(TileType.Wave);
+    Assert(!MatchFinder.HasAnyMatch(board), "precondition: board must have no pre-existing match");
+
+    var res = SwapEngine.TryManualActivationSwap(board, 0, 2, 0, 3, new Random(1));
+
+    Assert(res.Triggered, "manual activation must fire regardless of an incidental ordinary match (precedence)");
+    // Proves the aimed (column-clear) path fired, not the ordinary row-match path.
+    for (int r = 0; r < 5; r++)
+        Assert(res.ClearedCells.Contains((r, 3)), $"expected aimed column cell ({r},3) cleared");
+});
+
+Run("Task11: two regular tiles never trigger manual activation", () =>
+{
+    var board = FillerBoard(5, 5);
+    var res = SwapEngine.TryManualActivationSwap(board, 2, 2, 2, 3, new Random(1));
+    Assert(!res.Triggered, "two non-booster tiles must never trigger manual activation");
+});
+
+Run("Task11: non-adjacent or out-of-bounds booster pairs do not trigger", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[0, 0] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    board[0, 3] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    var nonAdjacent = SwapEngine.TryManualActivationSwap(board, 0, 0, 0, 3, new Random(1));
+    Assert(!nonAdjacent.Triggered, "non-adjacent booster pair must not trigger (adjacency guard)");
+
+    var outOfBounds = SwapEngine.TryManualActivationSwap(board, 0, 0, 0, 99, new Random(1));
+    Assert(!outOfBounds.Triggered, "out-of-bounds coordinates must not trigger (bounds guard)");
+});
+
+Run("Task11: an aimed SolarFlare is consumed and does not chain into its own color", () =>
+{
+    // Booster is Sun/SolarFlare; target is a Flower tile. Aimed effect should
+    // clear Flower tiles (target color) plus the spent booster's own cell, but
+    // must NOT sweep up Sun tiles via chain re-activation.
+    var board = FillerBoard(5, 5);
+    board[2, 2] = new Tile(TileType.Sun, BoosterType.SolarFlare);
+    board[2, 3] = new Tile(TileType.Flower); // target (regular)
+    board[0, 0] = new Tile(TileType.Flower);
+    board[4, 4] = new Tile(TileType.Sun);    // a booster-color tile that must survive
+
+    var res = SwapEngine.TryManualActivationSwap(board, 2, 2, 2, 3, new Random(1));
+    Assert(res.Triggered, "SolarFlare booster + regular tile should trigger");
+    Assert(res.ClearedCells.Contains((2, 3)), "the spent booster's landing cell must be cleared");
+    Assert(res.ClearedCells.Contains((0, 0)), "a target-color (Flower) cell should be cleared");
+    Assert(!res.ClearedCells.Contains((4, 4)), "a booster-color (Sun) cell must not be swept up");
+});
+
+// Layer 3 — end-to-end cascade integration
+
+Run("Task11: manual-activation result feeds the full cascade loop (Rounds >= 2)", () =>
+{
+    var board = FillerBoard(5, 5);
+    // Column 0 telescopes into a Wave-Wave-Wave vertical match once row 2 clears,
+    // independent of refill randomness (same technique as Task 4's telescoping test).
+    board[0, 0] = new Tile(TileType.Wave);
+    board[1, 0] = new Tile(TileType.Wave);
+    board[3, 0] = new Tile(TileType.Wave);
+    board[4, 0] = new Tile(TileType.Sun);
+    board[2, 0] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    board[2, 1] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    Assert(!MatchFinder.HasAnyMatch(board), "precondition: engineered board must start matchless");
+
+    var config = new BoardConfig(rows: 5, columns: 5, seed: 7);
+    var rngLocal = new Random(7);
+    var swap = SwapEngine.TryManualActivationSwap(board, 2, 0, 2, 1, rngLocal);
+    Assert(swap.Triggered, "precondition: BloomBurst pair should trigger");
+
+    var result = CascadeEngine.ResolveCascadeFrom(board, swap.ClearedCells, config, rngLocal);
+    Assert(result.Rounds >= 2, $"expected the telescoped match to produce a 2nd cascade round, got {result.Rounds}");
+});
+
+Run("Task11: credit bags on manually-cleared cells are counted", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[3, 2] = board[3, 2].WithCreditBag(true);
+
+    var cleared = new HashSet<(int Row, int Col)> { (3, 0), (3, 1), (3, 2), (3, 3), (3, 4) };
+    var config = new BoardConfig(rows: 5, columns: 5, seed: 5);
+    var result = CascadeEngine.ResolveCascadeFrom(board, cleared, config, new Random(5));
+
+    Assert(result.CreditBagsCollected >= 1, $"expected the bagged cleared cell to be counted, got {result.CreditBagsCollected}");
+});
+
+Run("Task11: original GetAffectedCells path is unchanged (regression guard)", () =>
+{
+    var board = FillerBoard(5, 5);
+    board[2, 2] = new Tile(TileType.Flower, BoosterType.BloomBurst);
+    var bloom = BoosterActivation.GetAffectedCells(board, 2, 2, new Random(1));
+    Assert(bloom.Count == 5, "original BloomBurst should still clear its own full row");
+    for (int c = 0; c < 5; c++)
+        Assert(bloom.Contains((2, c)), $"original BloomBurst should include (2,{c})");
+
+    var board2 = FillerBoard(4, 4);
+    board2[1, 1] = new Tile(TileType.Sun, BoosterType.SolarFlare);
+    board2[3, 3] = new Tile(TileType.Sun);
+    var flare = BoosterActivation.GetAffectedCells(board2, 1, 1, new Random(1));
+    foreach (var cell in flare)
+        Assert(board2[cell.Row, cell.Col].Type == TileType.Sun, $"original SolarFlare should read its own color; {cell} is not Sun");
+    Assert(flare.Contains((1, 1)) && flare.Contains((3, 3)), "original SolarFlare should include all Sun cells");
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 
 if (failed > 0)
     Environment.Exit(1);
+
+// --- local helpers for Task 11 ---
+// Matchless filler: (r+c)%3 cycles Flower/Leaf/Wave so no two 4-adjacent cells
+// share a type, guaranteeing HasAnyMatch(board) == false before any override.
+static Board FillerBoard(int rows, int cols)
+{
+    var board = new Board(rows, cols);
+    var cycle = new[] { TileType.Flower, TileType.Leaf, TileType.Wave };
+    for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+            board[r, c] = new Tile(cycle[(r + c) % 3]);
+    return board;
+}
+
+static bool SameCells(IEnumerable<(int Row, int Col)> a, IEnumerable<(int Row, int Col)> b)
+{
+    var sa = new HashSet<(int Row, int Col)>(a);
+    var sb = new HashSet<(int Row, int Col)>(b);
+    return sa.SetEquals(sb);
+}
 
 // --- local helpers for Task 3 snapshot comparisons ---
 static TileType[,] SnapshotTypes(Board board)

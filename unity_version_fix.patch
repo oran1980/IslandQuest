@@ -1,0 +1,59 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 794611b..2e0ed15 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -11,6 +11,13 @@ Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD
+ folder — ask the user to re-upload it if you need to check something against
+ the primary source that isn't already captured in `requirements.md`).
+ 
++**Repo**: `https://github.com/oran1980/IslandQuest` (public).
++
++**Target engine**: **Unity 6.3 LTS** — not "Unity 2023 LTS" as the original
++GDD states (that version line doesn't exist; see `design.md` §0 for the
++correction). Only relevant once Task 9's Unity project is opened in the
++actual Editor.
++
+ ## Mandatory process — read these before writing any code
+ 
+ 1. **`specs/PROCESS.md`** — the RED → GREEN → REFACTOR → REVIEW cycle. This
+diff --git a/README.md b/README.md
+index d051683..7ce66ec 100644
+--- a/README.md
++++ b/README.md
+@@ -44,7 +44,7 @@ purpose. It's plain C# game rules — board generation, match detection,
+ cascades — kept separate from any MonoBehaviour/presentation code. That
+ means:
+ 
+-1. **You can drop this folder straight into a Unity 2023 LTS project** at
++1. **You can drop this folder straight into a Unity 6.3 LTS project** at
+    `Assets/Scripts/Match3/` and it will compile as-is, no changes needed.
+ 2. **It's independently testable without opening Unity.** This sandbox has
+    no Unity Editor and no NuGet access (confirmed — `nuget.org` returns 403
+diff --git a/specs/core-puzzle/design.md b/specs/core-puzzle/design.md
+index 1ead1b3..3b89f69 100644
+--- a/specs/core-puzzle/design.md
++++ b/specs/core-puzzle/design.md
+@@ -3,6 +3,23 @@
+ Implements: `requirements.md` (Requirements 1–2 now; 3–4 stubbed for later
+ tasks). Maps to GDD §11.1 folder layout and §11.2 class table.
+ 
++## 0. Target engine (tech notes)
++
++The GDD specifies "Unity 2023 LTS." **That version line no longer exists** —
++Unity's release model changed and went straight from the 2022 LTS line to
++Unity 6; there is no "2023 LTS." The current equivalent recommendation is
++**Unity 6.3 LTS** (2-year support window, through December 2027). This is a
++correction to an outdated fact in the source GDD, not a design choice — the
++GDD's actual intent ("use the current LTS release for stability") is
++unaffected, only the specific version number was stale.
++
++Practical implication: nothing in `Assets/Scripts/Match3/*.cs` depends on
++this either way (it's plain C#, zero `UnityEngine` references — see §1
++below), so this only matters once Task 9's `BoardController` and the Unity
++project itself are opened in the actual Editor. Install via Unity Hub,
++selecting Unity 6.3 LTS, not a bare/standalone installer, so version
++upgrades stay manageable.
++
+ ## 1. Layering decision
+ 
+ GDD §11.2 lists `BoardController` and `MatchFinder` as if they were one

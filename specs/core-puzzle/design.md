@@ -180,26 +180,6 @@ randomness exists in this module, so a given seed reproduces an identical
 board — needed for unit tests, and useful later for "replay this level"
 debugging or fairness audits.
 
-## 4. What's explicitly deferred (and why it's safe to defer)
-
-- **Swap commit/revert (Req 3), cascades, boosters, credit collection,
-  star-rating payout, lives** — each needs `MatchFinder` and `Board` to exist
-  first; building them now would mean designing the swap API against an
-  unstable foundation. `tasks.md` sequences these as Tasks 3–8.
-- **Unity `BoardController` MonoBehaviour** — intentionally last (Task 9),
-  once the rules it wraps can't change underneath it.
-
-## 5. Test strategy
-
-No Unity Editor and no NuGet access exist in this environment (NuGet restore
-is blocked by network policy — confirmed before writing any code), so this
-spec uses a **dependency-free verification program** instead of xUnit/NUnit:
-plain `Main()` assertions, compiled and run via `dotnet run`, that include the
-exact same `.cs` files Unity will later compile (via `<Compile Include>` in
-the verify project, not copies — one source of truth). This is a deliberate,
-documented substitution for a conventional test framework, not a shortcut:
-every assertion still really compiles and really executes.
-
 ### 3.4 Cascade resolution (`CascadeEngine`, Task 4)
 
 Implements Requirement 4a. Row index convention (not previously stated
@@ -279,6 +259,104 @@ straightforward if it turns out to matter — flagging here rather than
 building it speculatively, per the project's stated style of not solving
 problems that can't yet be observed to occur.
 
+### 3.6 Manual booster activation via swap (Requirement 5c)
+
+#### Why this needs a new code path, not a modification to existing ones
+
+Three pieces of already-verified code exist that this feature builds on top
+of, and each gets extended via a **new, additive symbol** rather than a
+signature change — consistent with how Task 6 extended Task 4's
+`CascadeEngine` without touching `ClearGravityRefill` itself:
+
+- **`BoosterActivation.GetAffectedCells`** (Requirement 5) always reads the
+  booster's own position and color. `GetAffectedCellsAimed` is a new
+  overload taking an explicit target position (and, for `SolarFlare`, an
+  explicit target color) instead of deriving both from the booster tile
+  itself. The original method's 6 per-booster tests (Task 5) stay
+  completely untouched and keep passing against the original signature.
+- **`SwapEngine.TrySwap`** (Task 3) only ever asks "does this swap create an
+  ordinary match?" `TryManualActivationSwap` is a **separate, new method**
+  checking the two Requirement 5c conditions (two BloomBursts; booster +
+  non-booster). It does not replace or wrap `TrySwap` — see the composition
+  note below for how a caller uses both together.
+- **`CascadeEngine.ResolveCascade`** (Task 4) always *discovers* its initial
+  cleared-cell set by calling `MatchResolver.FindMatchGroups` itself.
+  `ResolveCascadeFrom` is a new entry point that accepts an
+  already-determined cleared-cell set as a parameter instead, then runs the
+  exact same gravity/refill/re-scan loop. This lets a manually-triggered
+  booster effect (which isn't a `MatchGroup` at all — it's a direct effect
+  lookup) feed into the identical cascade machinery an ordinary match uses,
+  rather than duplicating the loop.
+
+#### Composition: how a caller actually uses these together
+
+This is a decision this document should make explicit, since Requirement
+5c's "bypasses `SwapEngine`'s normal rule" wording doesn't by itself say
+*where* that bypass is decided. The intended flow, for `BoardController` (or
+any future caller) to follow:
+
+1. Call `SwapEngine.TryManualActivationSwap` first.
+2. If it reports "triggered," it has already committed the swap and
+   returned the resulting cleared-cell set — feed that directly into
+   `CascadeEngine.ResolveCascadeFrom`. Do not also call `TrySwap`.
+3. If it reports "not triggered" (neither Requirement 5c condition applied),
+   fall through to the existing `SwapEngine.TrySwap` exactly as before —
+   ordinary match-or-revert behavior, unchanged.
+
+This ordering is what satisfies the precedence note in Requirement 5c
+criterion 3 (manual activation fires *regardless* of whether the swap would
+also form an ordinary match) — checking manual-activation conditions first,
+unconditionally, rather than as a fallback after an ordinary-match check
+fails.
+
+#### The BloomBurst+BloomBurst tie-break
+
+When both swapped tiles are BloomBurst boosters, "whose row clears" is
+genuinely ambiguous — both are the same booster type. This spec picks the
+**second/target cell's row** (i.e. whichever tile the player dragged *onto*,
+consistent with the same target-position convention `GetAffectedCellsAimed`
+already establishes for the booster+regular-tile case) — deterministic,
+not GDD-derived (the GDD doesn't address this at all), and worth revisiting
+if playtesting shows the other tile's row would feel more intuitive.
+
+#### Consuming the fired booster (added during implementation)
+
+`GetAffectedCellsAimed` returns only the cells the *effect* designates. For
+row/column/3×3 aims the fired booster lands on the target cell, which is
+inside its own effect, so it clears as a byproduct. But an aimed
+**SolarFlare** clears the *target's* color, which generally isn't the
+booster's own color (Sun) — so the spent booster tile would neither be in
+the cleared set nor removed, and worse, `ResolveCascadeFrom`'s chain
+expansion would see it still sitting there as a live booster and re-fire it
+against its *own* color, directly contradicting criterion 3's "not the
+booster's own color." `TryManualActivationSwap` therefore **consumes** the
+fired booster after computing the aimed cells: it drops that cell's booster
+flag (so chain expansion can't re-activate it) and adds the cell to the
+cleared set (so a spent booster always leaves the board, regardless of
+effect type). This wasn't in the original write-up of this section; it was
+found in the Task 11 review pass and is recorded in the correction log
+below.
+
+## 4. What's explicitly deferred (and why it's safe to defer)
+
+- **Swap commit/revert (Req 3), cascades, boosters, credit collection,
+  star-rating payout, lives** — each needs `MatchFinder` and `Board` to exist
+  first; building them now would mean designing the swap API against an
+  unstable foundation. `tasks.md` sequences these as Tasks 3–8.
+- **Unity `BoardController` MonoBehaviour** — intentionally last (Task 9),
+  once the rules it wraps can't change underneath it.
+
+## 5. Test strategy
+
+No Unity Editor and no NuGet access exist in this environment (NuGet restore
+is blocked by network policy — confirmed before writing any code), so this
+spec uses a **dependency-free verification program** instead of xUnit/NUnit:
+plain `Main()` assertions, compiled and run via `dotnet run`, that include the
+exact same `.cs` files Unity will later compile (via `<Compile Include>` in
+the verify project, not copies — one source of truth). This is a deliberate,
+documented substitution for a conventional test framework, not a shortcut:
+every assertion still really compiles and really executes.
+
 ### Design correction log
 
 - Booster eligibility (§2): corrected from a speculative shape-based theory
@@ -286,3 +364,12 @@ problems that can't yet be observed to occur.
 - Cascade refill (§3.4): corrected from a speculative matchless-refill rule
   (which would have suppressed real cascades) to plain random refill, before
   Task 4 was implemented.
+- Manual activation, spent booster (§3.6): the original §3.6 write-up
+  described `GetAffectedCellsAimed` and the composition flow but didn't say
+  what happens to the *fired* booster tile. During Task 11's review pass an
+  aimed SolarFlare was found to leave its spent booster on the board and
+  (via chain expansion) re-fire it against its own color — a criterion-3
+  violation. Added the "consume the fired booster" rule (drop the booster
+  flag + add its cell to the cleared set) in `SwapEngine.
+  TryManualActivationSwap`, with a dedicated regression test. Caught during
+  Task 11, before marking it done.

@@ -124,6 +124,61 @@ namespace IslandQuest.Match3
         }
 
         /// <summary>
+        /// Requirement 5c criterion 4 / design.md §3.6: entry point for a
+        /// cascade whose first round's cleared cells are already known (e.g. a
+        /// manual booster activation, which is a direct effect lookup rather
+        /// than a <see cref="MatchGroup"/>). Runs that provided set through the
+        /// same booster-chain expansion, credit-bag counting, and gravity/
+        /// refill as an ordinary round, then continues the identical
+        /// re-scan/clear/drop/refill loop as <see cref="ResolveCascade"/> — so
+        /// manual activations reuse the exact cascade machinery, not a parallel
+        /// copy. An empty <paramref name="initialClearedCells"/> degrades
+        /// cleanly to <see cref="ResolveCascade"/>'s behavior.
+        /// </summary>
+        public static CascadeResult ResolveCascadeFrom(Board board, IReadOnlyCollection<(int Row, int Col)> initialClearedCells, BoardConfig config, Random rng, int maxRounds = DefaultMaxRounds)
+        {
+            int rounds = 0;
+            int creditBagsCollected = 0;
+
+            var seedCells = new HashSet<(int Row, int Col)>(initialClearedCells);
+            if (seedCells.Count > 0)
+            {
+                ExpandBoosterChain(board, seedCells, rng);
+                creditBagsCollected += CountClearedCreditBags(board, seedCells);
+                ClearGravityRefill(board, seedCells, config, rng);
+                rounds++;
+            }
+
+            while (true)
+            {
+                var groups = MatchResolver.FindMatchGroups(board);
+                if (groups.Count == 0)
+                    break;
+
+                if (rounds >= maxRounds)
+                {
+                    throw new InvalidOperationException(
+                        $"CascadeEngine.ResolveCascadeFrom exceeded maxRounds ({maxRounds}) without stabilizing. " +
+                        "This should not happen in real gameplay and likely indicates a bug in match " +
+                        "clearing/refill rather than a legitimately long cascade.");
+                }
+
+                var clearedCells = DetermineClearedCells(board, groups, rng);
+                creditBagsCollected += CountClearedCreditBags(board, clearedCells);
+
+                ClearGravityRefill(board, clearedCells, config, rng);
+                rounds++;
+            }
+
+            var (bonusCredits, dropBag) = ComputeComboBonus(rounds);
+
+            if (dropBag)
+                DropOneBonusBag(board, rng);
+
+            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected);
+        }
+
+        /// <summary>
         /// Implements Requirement 5: for each match group, either spawns a
         /// booster tile (booster-eligible groups keep one cell — the
         /// topmost, then leftmost, per requirements.md's interpretation
@@ -158,6 +213,22 @@ namespace IslandQuest.Match3
                 }
             }
 
+            ExpandBoosterChain(board, clearedCells, rng);
+
+            return clearedCells;
+        }
+
+        /// <summary>
+        /// Fixed-point chain reaction (Requirement 5 criterion 3 / 5c criterion
+        /// 4): repeatedly scans <paramref name="clearedCells"/> for any cell
+        /// that is itself a still-present booster tile and unions in its
+        /// <see cref="BoosterActivation.GetAffectedCells"/> effect, until a full
+        /// pass adds nothing new. Shared by <see cref="DetermineClearedCells"/>
+        /// (match-driven clears) and <see cref="ResolveCascadeFrom"/> (manual
+        /// activations) so both chain identically, however deep.
+        /// </summary>
+        private static void ExpandBoosterChain(Board board, HashSet<(int Row, int Col)> clearedCells, Random rng)
+        {
             var processed = new HashSet<(int Row, int Col)>();
             bool changed = true;
             while (changed)
@@ -176,8 +247,6 @@ namespace IslandQuest.Match3
                             changed = true;
                 }
             }
-
-            return clearedCells;
         }
 
         /// <summary>Topmost, then leftmost cell of the group — see requirements.md
