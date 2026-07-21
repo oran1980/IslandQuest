@@ -259,7 +259,7 @@ straightforward if it turns out to matter — flagging here rather than
 building it speculatively, per the project's stated style of not solving
 problems that can't yet be observed to occur.
 
-### 3.6 Manual booster activation via swap (Requirement 5c)
+### 3.6 Manual booster activation via swap (Requirement 5c, Task 11)
 
 #### Why this needs a new code path, not a modification to existing ones
 
