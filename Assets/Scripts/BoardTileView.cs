@@ -27,13 +27,30 @@ public sealed class BoardTileView : MonoBehaviour, IPointerDownHandler, IPointer
 
         if (_labelText != null)
         {
+            // Boosters get a distinct two-letter code so they can't be mistaken
+            // for a plain tile — a single letter collides (LeafWheel vs Leaf,
+            // SolarFlare/SporeCloud vs Sun).
             var label = tile.Booster != IslandQuest.Match3.BoosterType.None
-                ? tile.Booster.ToString().Substring(0, 1)
+                ? GetBoosterLabel(tile.Booster)
                 : tile.Type.ToString().Substring(0, 1);
             if (tile.HasCreditBag)
                 label += "*";
             _labelText.text = label;
         }
+    }
+
+    private static string GetBoosterLabel(IslandQuest.Match3.BoosterType booster)
+    {
+        return booster switch
+        {
+            IslandQuest.Match3.BoosterType.BloomBurst => "BB",
+            IslandQuest.Match3.BoosterType.LeafWheel => "LW",
+            IslandQuest.Match3.BoosterType.TidalClear => "TC",
+            IslandQuest.Match3.BoosterType.SolarFlare => "SF",
+            IslandQuest.Match3.BoosterType.SporeCloud => "SC",
+            IslandQuest.Match3.BoosterType.DeepSurge => "DS",
+            _ => "?",
+        };
     }
 
     private static Color GetColorForType(IslandQuest.Match3.TileType type)
