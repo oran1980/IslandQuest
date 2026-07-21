@@ -646,6 +646,89 @@ Run("Task14: CollectBags levels seed exactly their target bag count", () =>
     }
 });
 
+Console.WriteLine("--- Task 15: Level session (moves, progress, win/loss) ---");
+
+// Small helper: a synthetic cascade outcome for one move.
+CascadeResult Move(int tiles, int score, int bags = 0) => new CascadeResult(1, 0, false, bags, tiles, score);
+var Palette = new[] { TileType.Flower, TileType.Leaf, TileType.Wave, TileType.Sun, TileType.Mushroom, TileType.Coral };
+
+Run("Task15: a level is won when the objective completes, with stars & difficulty-scaled credits", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 100), 5, Palette, difficulty: Difficulty.Hard);
+    var session = new LevelSession(level, new LevelStarThresholds(100, 200, 300));
+
+    Assert(session.Outcome == LevelOutcome.InProgress, "a fresh session is in progress");
+    Assert(session.MovesRemaining == 5, $"starts with the full move budget, got {session.MovesRemaining}");
+
+    session.ApplyMove(Move(tiles: 20, score: 250)); // 2-star score, objective (>=100) met
+    Assert(session.Outcome == LevelOutcome.Won, "objective met => won");
+
+    var result = session.GetResult();
+    Assert(result.IsComplete, "won result should be complete");
+    Assert(result.Stars == 2, $"score 250 vs 100/200/300 => 2 stars, got {result.Stars}");
+    Assert(result.CreditPayout == 53, $"Hard 2-star => round(35 x 1.5)=53, got {result.CreditPayout}");
+});
+
+Run("Task15: completing a level always earns at least 1 star even below the 2-star threshold", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Collect, 5), 5, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(1000, 2000, 3000));
+    session.ApplyMove(Move(tiles: 6, score: 60)); // collected 6 >= 5 => complete; score below all thresholds
+    Assert(session.Outcome == LevelOutcome.Won, "collect objective met => won");
+    Assert(session.GetResult().Stars == 1, $"completion floors at 1 star, got {session.GetResult().Stars}");
+});
+
+Run("Task15: a level is lost when moves run out with the objective incomplete", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 1000), 2, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(1000, 2000, 3000));
+
+    session.ApplyMove(Move(tiles: 5, score: 50));
+    Assert(session.Outcome == LevelOutcome.InProgress, "one move left, objective not met yet");
+    session.ApplyMove(Move(tiles: 5, score: 50)); // moves exhausted, score 100 < 1000
+    Assert(session.Outcome == LevelOutcome.Lost, "moves exhausted & objective incomplete => lost");
+
+    var result = session.GetResult();
+    Assert(!result.IsComplete && result.Stars == 0 && result.CreditPayout == 0, "a loss yields no stars and no credits");
+});
+
+Run("Task15: progress accumulates across moves and the move budget counts down", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Collect, 30), 4, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(50, 100, 150));
+
+    session.ApplyMove(Move(tiles: 8, score: 80, bags: 1));
+    session.ApplyMove(Move(tiles: 7, score: 70));
+    Assert(session.TilesCleared == 15, $"tiles 8+7=15, got {session.TilesCleared}");
+    Assert(session.Score == 150, $"score 80+70=150, got {session.Score}");
+    Assert(session.BagsCollected == 1, $"bags=1, got {session.BagsCollected}");
+    Assert(session.MovesRemaining == 2, $"4-2=2 moves left, got {session.MovesRemaining}");
+    Assert(session.Outcome == LevelOutcome.InProgress, "15 tiles < 30 target and moves remain");
+});
+
+Run("Task15: a CollectBags level completes once all its seeded bags are collected", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.CollectBags, 3), 10, Palette,
+        minInitialCreditBags: 3, maxInitialCreditBags: 3);
+    var session = new LevelSession(level, new LevelStarThresholds(50, 100, 150));
+
+    session.ApplyMove(Move(tiles: 10, score: 100, bags: 2));
+    Assert(session.Outcome == LevelOutcome.InProgress, "1 bag still uncollected");
+    session.ApplyMove(Move(tiles: 10, score: 100, bags: 1));
+    Assert(session.Outcome == LevelOutcome.Won, "all 3 bags collected => won");
+});
+
+Run("Task15: applying a move after the level is over is rejected", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 10), 3, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(10, 20, 30));
+    session.ApplyMove(Move(tiles: 5, score: 50)); // wins immediately
+    bool threw = false;
+    try { session.ApplyMove(Move(tiles: 5, score: 50)); }
+    catch (InvalidOperationException) { threw = true; }
+    Assert(threw, "ApplyMove should throw once the level is Won or Lost");
+});
+
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");
 
 Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>

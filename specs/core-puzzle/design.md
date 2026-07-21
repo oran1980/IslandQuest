@@ -452,13 +452,27 @@ Hard 2★ = 53, VeryHard 3★ = 110). Multipliers are balance values, tunable.
 `ClearBoard` was replaced by `CollectBags` (target = bag count; the level
 seeds exactly that many bags so it's always winnable).
 
-### 7.4 Level session (Task 15 — planned) and UI (Task 16 — planned)
+### 7.4 Level session (Task 15 — done) and UI (Task 16 — planned)
 
-A `LevelSession` will fold each move's `CascadeResult` into a running
-`LevelProgress` (score / tiles / bags), count moves against the limit, and
-decide win (objective met) vs loss (moves exhausted), producing the final
-`LevelResult` (stars + credits) via the existing `LevelEvaluator`. The Unity
-level-select + results screens (Task 16) sit on top of that.
+`LevelSession` folds each move's `CascadeResult` into a running
+`LevelProgress` (score / tiles / bags), counts moves against the limit, and
+exposes an `Outcome`: **Won** the instant the objective completes, **Lost**
+once the move budget is spent with it still incomplete. `GetResult()` grades
+via `LevelEvaluator` (stars + difficulty-scaled credits). `ApplyMove` throws
+once the level is over.
+
+**Star grading (decided here).** Stars grade on **score** for every objective
+type — `LevelObjective.PerformanceValue` now always returns `progress.Score`,
+so the objective type only sets the *win* condition while *how well* you
+played is always your points (this makes 2–3 stars meaningful on
+Collect/CollectBags levels, whose objective quantities cap out at their
+target). Completing a level **floors at 1 star** (`LevelEvaluator` takes
+`max(1, thresholds.GetStars(score))` when complete); 2–3 come from the score
+thresholds. Per-level star thresholds are still supplied to the session by the
+caller — deriving/authoring them per level is a small balancing follow-up for
+Task 16.
+
+The Unity level-select + results screens (Task 16) sit on top of this.
 
 ### Design correction log
 

@@ -246,13 +246,14 @@ end state, so this is auditable rather than asserted.
     (seed the target bag count). Engine + data, verify-testable.
   - _Verification: see "How Task 14 was verified" below._
 
-- [ ] **15. Level session — moves, progress, win/loss** (Requirement 7 crit. 5)
+- [x] **15. Level session — moves, progress, win/loss** (Requirement 7 crit. 5)
   - A `LevelSession` that consumes each move's `CascadeResult`, accumulates
     score / tiles-cleared / bags-collected into a `LevelProgress`, counts
     moves against the limit, and reports win (objective met) / loss (out of
     moves) plus the final `LevelResult` (stars + credits). Engine,
     verify-testable — the "missing middle" that makes a level actually
     playable to completion.
+  - _Verification: see "How Task 15 was verified" below._
 
 - [ ] **16. Unity level-select + results UI**
   - Level-select screen (levels with difficulty labels / star records) →
@@ -712,3 +713,33 @@ Baseline before starting: 75 passed, 0 failed.
    1.5) = 53, VeryHard 3★ = 110); `CollectBags` bag seeds fit `BoardConfig`'s
    `max ≤ rows×cols` bound; and the default-`Easy` overload keeps the flat
    20/35/55 payout for callers that don't pass a difficulty.
+
+## How Task 15 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 80 passed, 0 failed.
+
+1. RED step: added 7 tests referencing `LevelSession` and the `LevelOutcome`
+   enum — neither existed. Confirmed compile failure first: `LevelOutcome does
+   not exist in the current context` and `The type or namespace name
+   'LevelSession' could not be found`.
+2. GREEN step:
+   - Refined grading so the session's stars are meaningful:
+     `LevelObjective.PerformanceValue` now always returns `progress.Score`
+     (objective type sets only the win condition; score sets the grade), and
+     `LevelEvaluator` floors a completed level at 1 star
+     (`max(1, thresholds.GetStars(score))`). Verified these keep every prior
+     grading test green — the Task 7 Collect test happened to use score 0, so
+     `max(1, GetStars(0)) = 1` still matches its expected 1 star.
+   - Added `LevelSession` + `LevelOutcome`: folds each move's `CascadeResult`
+     into running score/tiles/bags, counts moves, returns Won on objective
+     completion / Lost at move exhaustion, and grades via `LevelEvaluator`.
+     `ApplyMove` throws once the level is over; `CollectBags` remaining bags =
+     `Target − bagsCollected` (clamped).
+   - Full suite: **86 passed, 0 failed** (Tasks 7 and 14 unaffected).
+3. REVIEW: checked the win path (objective met → Won → stars/credits), loss
+   path (moves exhausted incomplete → 0 stars/0 credits), progress
+   accumulation + move countdown, the CollectBags completion path, the 1-star
+   floor on a low-score completion, and the post-over `ApplyMove` guard. The
+   only caller-supplied input the session still needs is the per-level
+   `LevelStarThresholds`; per-level threshold authoring/derivation is deferred
+   to Task 16 (noted in design.md §7.4).

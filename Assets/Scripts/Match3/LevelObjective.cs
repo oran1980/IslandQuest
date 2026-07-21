@@ -56,14 +56,12 @@ namespace IslandQuest.Match3
             if (progress is null)
                 throw new ArgumentNullException(nameof(progress));
 
-            return Type switch
-            {
-                LevelObjectiveType.Score => progress.Score,
-                LevelObjectiveType.Collect => progress.Collected,
-                // Stars on a bag-collection level reflect how well you scored.
-                LevelObjectiveType.CollectBags => progress.Score,
-                _ => throw new InvalidOperationException("Unknown objective type."),
-            };
+            // Stars grade on the universal skill metric — score — regardless of
+            // objective type (Requirement 7 / design.md §7.4). The objective
+            // type only decides the *win* condition (IsComplete); how *well* you
+            // played is always your points. Uniform, and it makes 2–3 stars
+            // meaningful on Collect/CollectBags levels too.
+            return progress.Score;
         }
     }
 
@@ -140,7 +138,9 @@ namespace IslandQuest.Match3
             if (progress is null) throw new ArgumentNullException(nameof(progress));
 
             bool completed = objective.IsComplete(progress);
-            int stars = completed ? thresholds.GetStars(objective.PerformanceValue(progress)) : 0;
+            // Completing a level always earns at least 1 star; 2–3 come from the
+            // score thresholds (design.md §7.4).
+            int stars = completed ? Math.Max(1, thresholds.GetStars(objective.PerformanceValue(progress))) : 0;
             int payout = ComputePayout(stars, difficulty);
             return new LevelResult(completed, stars, payout);
         }
