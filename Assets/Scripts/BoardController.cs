@@ -120,6 +120,9 @@ public sealed class BoardController : MonoBehaviour
 
         _isBusy = true;
 
+        if (_rng is null)
+            _rng = _config.Seed.HasValue ? new System.Random(_config.Seed.Value) : new System.Random();
+
         var sourceView = _tileViews[source];
         var targetView = _tileViews[target];
         var sourcePosition = sourceView.transform.localPosition;
@@ -127,6 +130,24 @@ public sealed class BoardController : MonoBehaviour
 
         yield return AnimateSwap(sourceView, targetView, sourcePosition, targetPosition);
 
+        // Requirement 5c precedence (design.md §3.6): attempt manual booster
+        // activation first. If it fires, it has already committed the swap and
+        // returned the cleared cells — feed those straight into the cascade.
+        var manual = SwapEngine.TryManualActivationSwap(_board, source.Row, source.Col, target.Row, target.Col, _rng);
+        if (manual.Triggered)
+        {
+            RefreshAllTiles();
+            yield return new WaitForSeconds(cascadeStepDelay);
+
+            CascadeEngine.ResolveCascadeFrom(_board, manual.ClearedCells, _config, _rng);
+            RefreshAllTiles();
+            yield return new WaitForSeconds(cascadeStepDelay);
+
+            _isBusy = false;
+            yield break;
+        }
+
+        // Otherwise fall through to the ordinary match-or-revert swap.
         var result = SwapEngine.TrySwap(_board, source.Row, source.Col, target.Row, target.Col);
         if (!result.Success)
         {
@@ -137,9 +158,6 @@ public sealed class BoardController : MonoBehaviour
 
         RefreshAllTiles();
         yield return new WaitForSeconds(cascadeStepDelay);
-
-        if (_rng is null)
-            _rng = _config.Seed.HasValue ? new System.Random(_config.Seed.Value) : new System.Random();
 
         CascadeEngine.ResolveCascade(_board, _config, _rng);
         RefreshAllTiles();

@@ -44,7 +44,7 @@ purpose. It's plain C# game rules — board generation, match detection,
 cascades — kept separate from any MonoBehaviour/presentation code. That
 means:
 
-1. **You can drop this folder straight into a Unity 2023 LTS project** at
+1. **You can drop this folder straight into a Unity 6.3 LTS project** at
    `Assets/Scripts/Match3/` and it will compile as-is, no changes needed.
 2. **It's independently testable without opening Unity.** This sandbox has
    no Unity Editor and no NuGet access (confirmed — `nuget.org` returns 403

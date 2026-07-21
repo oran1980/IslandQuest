@@ -11,6 +11,13 @@ Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD
 folder — ask the user to re-upload it if you need to check something against
 the primary source that isn't already captured in `requirements.md`).
 
+**Repo**: `https://github.com/oran1980/IslandQuest` (public).
+
+**Target engine**: **Unity 6.3 LTS** — not "Unity 2023 LTS" as the original
+GDD states (that version line doesn't exist; see `design.md` §0 for the
+correction). Only relevant once Task 9's Unity project is opened in the
+actual Editor.
+
 ## Mandatory process — read these before writing any code
 
 1. **`specs/PROCESS.md`** — the RED → GREEN → REFACTOR → REVIEW cycle. This
@@ -29,17 +36,26 @@ the primary source that isn't already captured in `requirements.md`).
 
 ## Current status
 
-Tasks 1–5 done (board generation, match detection/grouping, swap
-validation, cascade/gravity/combo loop, booster spawn & activation —
-row/column/3×3-zone/one-color/5-random/bottom-two-rows clears per GDD §7.2,
-mapping obtained from the user and now recorded in `requirements.md`'s
-Requirement 5). **Next: Task 6 — credit bag collection & mid-level spawns.**
-See `tasks.md` for the full remaining list (Tasks 6–10).
+**All tasks (1–11) are done.** The `verify/` suite is **67 passed, 0 failed**,
+and Task 9's Unity presentation layer has been playtested in Unity 6.3 LTS —
+grid render, drag-swap, cascade playback, and manual booster activation all
+confirmed on screen (see `tasks.md` Task 9's playtest log). This completes the
+M1 "Working Match-3 board" milestone.
 
-One open item from Task 4's review: `CascadeEngine.ClearGravityRefill`
-destroys credit-bag info on cleared cells with no record kept. Task 6 will
-need to read `MatchGroup.Cells` for `HasCreditBag` *before* calling
-`ClearGravityRefill`, not after. Documented in `tasks.md` under Task 4.
+Task 11 (manual booster activation via swap — `BoosterActivation.
+GetAffectedCellsAimed`, `SwapEngine.TryManualActivationSwap`/`ManualSwapResult`,
+`CascadeEngine.ResolveCascadeFrom`) was built with full RED/GREEN/REVIEW (see
+`tasks.md` "How Task 11 was verified") and is wired into `BoardController`,
+which tries the manual-activation path before falling back to `TrySwap`.
+
+During the Task 9 playtest, one presentation fix landed: `BoardTileView` now
+labels boosters with a distinct two-letter code (BB/LW/TC/SF/SC/DS) instead of
+a single letter that collided with tile letters.
+
+Running the suite: this machine has no standalone `dotnet` on PATH, but the
+Unity install bundles the matching SDK (8.0.318). Run with:
+`DOTNET_ROOT="/Applications/Unity/Hub/Editor/6000.5.3f1/Unity.app/Contents/Resources/Scripting/DotNetSdk" PATH="$DOTNET_ROOT:$PATH" dotnet run`
+from `verify/`.
 
 ## Key architecture facts
 
