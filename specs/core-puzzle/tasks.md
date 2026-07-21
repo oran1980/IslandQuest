@@ -114,8 +114,7 @@ end state, so this is auditable rather than asserted.
     scope here — this task only owns heart-count business logic).
   - _Verification: extends `verify/Program.cs` with lose-heart and regen tests._
 
-- [~] **9. Unity presentation layer — `BoardController`** *(code complete;
-    Editor playtest pending)*
+- [x] **9. Unity presentation layer — `BoardController`**
   - MonoBehaviour wrapping the now-stable core: tile prefab spawn/animate,
     drag input → `SwapEngine.TrySwap`, visual cascade playback. Now also
     routes drag input through `SwapEngine.TryManualActivationSwap` →
@@ -147,12 +146,33 @@ end state, so this is auditable rather than asserted.
     `Start()`→`BoardGenerator.Generate()`→`CreateBoardViews()` ran clean. (The
     only "error" lines in the log are unrelated Unity licensing/Connect 401
     noise.)_
-  - _Still `[~]`, not `[x]`: everything a log can prove is green, but the
-    actual point of this task — that tiles render in a grid and that
-    drag-swap, cascade playback, and a manual booster swap all **look/behave
-    right on screen** — needs a human watching the Game view. That's the one
-    remaining confirmation; see the checklist in the session notes. Flip to
-    `[x]` once eyeballed._
+  - _Editor playtest — DONE (Unity 6.3 LTS, screenshots captured at each
+    step). All four confirmed on screen:_
+    1. _**Grid render:** 9×9 of correctly color-coded tiles (M/C/L/F/W/S →
+       orange/red/green/pink/blue/yellow), single-letter labels, credit-bag
+       `*` suffix shown. Spot-checked matchless at generation (no pre-existing
+       3-run), confirming `BoardGenerator`'s invariant holds live._
+    2. _**Drag-swap:** swapping `(4,2)`F ↔ `(4,3)`C formed C-C-C at row 4
+       cols 0–2; the swap committed (didn't revert) and the trio cleared.
+       Verified by before/after diff: only the three cleared columns changed,
+       each shifting down exactly one with a fresh top refill; all other cells
+       byte-identical._
+    3. _**Cascade playback:** same test — gravity dropped survivors and
+       refilled the top; board settled matchless again. (A separate 4-match
+       later also dropped a bonus credit bag, incidentally confirming the 3+
+       combo-bonus path live.)_
+    4. _**Manual booster activation (Task 11 path):** a Wave 4-match spawned a
+       `TidalClear` booster, rendered unambiguously as `TC` at the spawn cell
+       `(6,2)`. Swapping that `TC` with the adjacent non-booster at `(6,3)`
+       fired immediately (did NOT revert) and cleared a 3×3 zone centered on
+       the target — verified by before/after diff showing **only columns 2–4
+       changed while columns 0,1,5,6,7,8 stayed byte-identical** (the unique
+       signature of an aimed 3×3, not a row/column/color clear), and the `S*`
+       credit bag inside the zone was collected._
+  - _One presentation gap found and fixed during the playtest: boosters were
+    labelled with a single letter that collided with tile letters (LeafWheel
+    vs Leaf, SolarFlare/SporeCloud vs Sun). `BoardTileView.SetTile` now shows a
+    distinct two-letter code (BB/LW/TC/SF/SC/DS); confirmed on screen as `TC`._
 
 - [x] **10. `ScriptableObject` level data for Island 1, Levels 1-5**
   - `LevelData` asset definitions (objective, move limit, allowed tile

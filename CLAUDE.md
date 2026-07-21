@@ -36,20 +36,21 @@ actual Editor.
 
 ## Current status
 
-All engine (non-Unity) tasks done: Tasks 1–8, 10, and 11. The `verify/`
-suite is **67 passed, 0 failed**. Task 11 (manual booster activation via
-swap — `BoosterActivation.GetAffectedCellsAimed`,
-`SwapEngine.TryManualActivationSwap`/`ManualSwapResult`,
-`CascadeEngine.ResolveCascadeFrom`) is complete with full RED/GREEN/REVIEW
-(see `tasks.md` "How Task 11 was verified").
+**All tasks (1–11) are done.** The `verify/` suite is **67 passed, 0 failed**,
+and Task 9's Unity presentation layer has been playtested in Unity 6.3 LTS —
+grid render, drag-swap, cascade playback, and manual booster activation all
+confirmed on screen (see `tasks.md` Task 9's playtest log). This completes the
+M1 "Working Match-3 board" milestone.
 
-**Only remaining item: Task 9 (`BoardController`) — code complete but marked
-`[~]`, not `[x]`.** The code is written and integrated (it now routes drag
-input through the manual-activation path before falling back to `TrySwap`),
-but it's a `UnityEngine` MonoBehaviour, so it can only be compiled/run inside
-the Unity Editor — which the `verify/` harness deliberately excludes. The
-outstanding step is a manual Editor playtest in Unity 6.3 LTS. See `tasks.md`
-Task 9 for exactly what to confirm in-Editor.
+Task 11 (manual booster activation via swap — `BoosterActivation.
+GetAffectedCellsAimed`, `SwapEngine.TryManualActivationSwap`/`ManualSwapResult`,
+`CascadeEngine.ResolveCascadeFrom`) was built with full RED/GREEN/REVIEW (see
+`tasks.md` "How Task 11 was verified") and is wired into `BoardController`,
+which tries the manual-activation path before falling back to `TrySwap`.
+
+During the Task 9 playtest, one presentation fix landed: `BoardTileView` now
+labels boosters with a distinct two-letter code (BB/LW/TC/SF/SC/DS) instead of
+a single letter that collided with tile letters.
 
 Running the suite: this machine has no standalone `dotnet` on PATH, but the
 Unity install bundles the matching SDK (8.0.318). Run with:
