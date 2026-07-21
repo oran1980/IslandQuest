@@ -411,6 +411,52 @@ level-select/results UI needs it. Likewise, no per-level ScriptableObject
 `.asset` files are authored — the canonical catalog is the C# `AllLevels`
 data; `LevelDataAsset` remains available for hand-authored Editor overrides.
 
+## 7. Level play — scoring, objectives, difficulty & rewards (Requirement 7)
+
+Making a level actually *playable to completion* needs a layer the M1 engine
+never had (`LevelProgress` was only ever built in tests). The GDD frames a
+level as one generic "objective" measured as a % (§7.3) paying flat star
+credits (§6.2) — but specifies no scoring formula, objective types, or
+difficulty-scaled rewards. The model below was chosen with the product owner
+(a Homescapes-style feel); it is a design decision, not GDD-derived.
+
+Sequenced as Tasks 13–16:
+
+### 7.1 Scoring (Task 13 — done)
+
+`ScoringRules.RoundScore(tiles, comboRound) = tiles × 10 × comboRound`.
+`CascadeEngine` accumulates `TilesCleared` and combo-weighted `Score` per
+round (round 1 = ×1, round 2 = ×2, …) and returns them on `CascadeResult`.
+Booster **spawn** cells are excluded (they aren't cleared); booster
+**chain-swept** cells are included. Kept as a separate pure class so the
+formula is tunable and unit-testable apart from the cascade loop.
+
+### 7.2 Objective types (Task 14 — planned)
+
+Three types, one per level:
+
+- `Score` — reach a points target (from §7.1).
+- `Collect` — clear a target count of tiles (`CascadeResult.TilesCleared`).
+- `CollectBags` — collect all of the level's credit bags. The level seeds
+  exactly the target bag count at generation so it's always attainable; this
+  **replaces `ClearBoard`**, which was unwinnable on a refilling board.
+
+### 7.3 Difficulty & reward (Task 14 — planned)
+
+Each level carries a `Difficulty` (Easy/Hard/VeryHard), generally rising
+across Levels 1–30. Reward credits = the GDD §6.2 star base (20/35/55) × a
+difficulty multiplier (Easy ×1.0, Hard ×1.5, VeryHard ×2.0), rounded — a
+documented extension of the GDD's flat payout so harder levels pay more.
+Multipliers are balance values, tunable.
+
+### 7.4 Level session (Task 15 — planned) and UI (Task 16 — planned)
+
+A `LevelSession` will fold each move's `CascadeResult` into a running
+`LevelProgress` (score / tiles / bags), count moves against the limit, and
+decide win (objective met) vs loss (moves exhausted), producing the final
+`LevelResult` (stars + credits) via the existing `LevelEvaluator`. The Unity
+level-select + results screens (Task 16) sit on top of that.
+
 ### Design correction log
 
 - Booster eligibility (§2): corrected from a speculative shape-based theory

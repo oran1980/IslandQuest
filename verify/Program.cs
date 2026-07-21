@@ -529,6 +529,57 @@ Run("Task4: ResolveCascade throws if maxRounds is exceeded (defensive cap)", () 
     Assert(threw, "expected ResolveCascade to throw when it can't finish within maxRounds");
 });
 
+Console.WriteLine("--- Task 13: Scoring rule (10/tile x combo) ---");
+
+Run("Task13: ScoringRules.RoundScore is 10/tile times the 1-based combo round", () =>
+{
+    Assert(ScoringRules.PointsPerTile == 10, $"expected 10 points per tile, got {ScoringRules.PointsPerTile}");
+    Assert(ScoringRules.RoundScore(5, 1) == 50, $"5 tiles in round 1 should score 50, got {ScoringRules.RoundScore(5, 1)}");
+    Assert(ScoringRules.RoundScore(5, 2) == 100, $"5 tiles in round 2 (x2) should score 100, got {ScoringRules.RoundScore(5, 2)}");
+    Assert(ScoringRules.RoundScore(3, 3) == 90, $"3 tiles in round 3 (x3) should score 90, got {ScoringRules.RoundScore(3, 3)}");
+    Assert(ScoringRules.RoundScore(0, 4) == 0, "zero tiles scores zero");
+});
+
+Run("Task13: ResolveCascade reports TilesCleared and a combo-weighted Score", () =>
+{
+    // Engineered telescoping board (mirrors the Task 4 chain test): a single
+    // Leaf 4-match at row 0 clears, and compaction forces a second-round match,
+    // so we get >=2 rounds and can assert Score reflects the combo weighting.
+    var config = new BoardConfig(rows: 4, columns: 4, seed: 44);
+    var board = new Board(4, 4);
+    var cycle = new[] { TileType.Wave, TileType.Sun, TileType.Coral };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(cycle[(r + c) % 3]);
+    // Force a Leaf row-of-4 at row 0.
+    for (int c = 0; c < 4; c++)
+        board[0, c] = new Tile(TileType.Leaf);
+
+    var result = CascadeEngine.ResolveCascade(board, config, new Random(44));
+    Assert(result.Rounds >= 1, "expected at least one cascade round");
+    // A 4-match spawns a booster and keeps its spawn cell (Task 5), so the
+    // row-of-4 clears 3 tiles that round — assert on that floor, not 4.
+    Assert(result.TilesCleared >= 3, $"expected at least 3 tiles cleared, got {result.TilesCleared}");
+    Assert(result.Score >= ScoringRules.PointsPerTile * result.TilesCleared,
+        $"combo-weighted score {result.Score} must be >= flat 10/tile baseline for {result.TilesCleared} tiles");
+});
+
+Run("Task13: ResolveCascadeFrom scores the provided first-round cells at round 1", () =>
+{
+    var config = new BoardConfig(rows: 5, columns: 5, seed: 5);
+    var board = new Board(5, 5);
+    var cycle = new[] { TileType.Flower, TileType.Leaf, TileType.Wave };
+    for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 5; c++)
+            board[r, c] = new Tile(cycle[(r + c) % 3]);
+
+    var cleared = new HashSet<(int Row, int Col)> { (2, 0), (2, 1), (2, 2), (2, 3), (2, 4) };
+    var result = CascadeEngine.ResolveCascadeFrom(board, cleared, config, new Random(5));
+    // The 5 provided cells clear in round 1 (x1) => at least 5 * 10 = 50 points.
+    Assert(result.TilesCleared >= 5, $"expected >= 5 tiles cleared, got {result.TilesCleared}");
+    Assert(result.Score >= 50, $"expected >= 50 points from the first-round clear, got {result.Score}");
+});
+
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");
 
 Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>

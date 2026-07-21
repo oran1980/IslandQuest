@@ -231,10 +231,11 @@ end state, so this is auditable rather than asserted.
   - _Verification: extends `verify/Program.cs`; see "How Task 12 was
     verified" below._
 
-- [ ] **13. Scoring rule** (Requirement 7 crit. 1)
+- [x] **13. Scoring rule** (Requirement 7 crit. 1)
   - `ScoringRules` (10 pts/tile × cascade-round combo multiplier). Surface
     `Score` and `TilesCleared` on `CascadeResult`, accumulated in both
     `ResolveCascade` and `ResolveCascadeFrom`. Engine, verify-testable.
+  - _Verification: see "How Task 13 was verified" below._
 
 - [ ] **14. Difficulty tiers, reward scaling & objective-type revision**
     (Requirement 7 crit. 2–4, 6–8)
@@ -652,3 +653,28 @@ levels, so it validates the first 5 rather than asserting the total is 5).
 Re-ran: **72 passed, 0 failed.** Requirements 6 and design.md §6 updated; the
 contradiction is logged in design.md's correction log.
 
+
+## How Task 13 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 72 passed, 0 failed.
+
+1. RED step: added 3 tests referencing `ScoringRules` and
+   `CascadeResult.TilesCleared`/`.Score` — none existed. Confirmed compile
+   failure first: `CS0103: The name 'ScoringRules' does not exist` and
+   `CS1061: 'CascadeResult' does not contain a definition for 'TilesCleared'`.
+2. GREEN step: added `ScoringRules` (pure: `PointsPerTile = 10`, `RoundScore =
+   tiles × 10 × comboRound`), added `TilesCleared`/`Score` to `CascadeResult`,
+   and accumulated both per round in `ResolveCascade` and `ResolveCascadeFrom`
+   (combo round = `rounds + 1`, so round 1 = ×1). The `CascadeResult`
+   constructor gained two params; only the two production call sites use it,
+   both updated — no test constructs it directly, so nothing else broke.
+3. One test bug found and fixed (not a production bug): the cascade test first
+   asserted a row-of-4 clears 4 tiles, but a 4-match spawns a booster and keeps
+   its spawn cell (Task 5), so it clears 3. Relaxed the floor to 3 and kept the
+   meaningful assertion — combo-weighted `Score ≥ 10 × TilesCleared`. Re-ran:
+   **75 passed, 0 failed.**
+4. REVIEW: booster spawn cells are (correctly) excluded from `TilesCleared`
+   and `Score` since they aren't cleared; booster-chain-swept cells are
+   included since they are. `ScoringRules` guards non-positive inputs. Prior
+   cascade tests (Tasks 4/5/6) stayed green, confirming the added accumulation
+   didn't disturb existing behavior.

@@ -11,12 +11,22 @@ namespace IslandQuest.Match3
         public bool BonusBagDropped { get; }
         public int CreditBagsCollected { get; }
 
-        public CascadeResult(int rounds, int bonusCredits, bool bonusBagDropped, int creditBagsCollected)
+        /// <summary>Total tiles cleared across all rounds of this cascade
+        /// (Requirement 7) — feeds `Collect` objectives.</summary>
+        public int TilesCleared { get; }
+
+        /// <summary>Combo-weighted points for this cascade
+        /// (<see cref="ScoringRules"/>) — feeds `Score` objectives.</summary>
+        public int Score { get; }
+
+        public CascadeResult(int rounds, int bonusCredits, bool bonusBagDropped, int creditBagsCollected, int tilesCleared, int score)
         {
             Rounds = rounds;
             BonusCredits = bonusCredits;
             BonusBagDropped = bonusBagDropped;
             CreditBagsCollected = creditBagsCollected;
+            TilesCleared = tilesCleared;
+            Score = score;
         }
     }
 
@@ -93,6 +103,8 @@ namespace IslandQuest.Match3
         {
             int rounds = 0;
             int creditBagsCollected = 0;
+            int tilesCleared = 0;
+            int score = 0;
 
             while (true)
             {
@@ -110,6 +122,8 @@ namespace IslandQuest.Match3
 
                 var clearedCells = DetermineClearedCells(board, groups, rng);
                 creditBagsCollected += CountClearedCreditBags(board, clearedCells);
+                tilesCleared += clearedCells.Count;
+                score += ScoringRules.RoundScore(clearedCells.Count, rounds + 1);
 
                 ClearGravityRefill(board, clearedCells, config, rng);
                 rounds++;
@@ -120,7 +134,7 @@ namespace IslandQuest.Match3
             if (dropBag)
                 DropOneBonusBag(board, rng);
 
-            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected);
+            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected, tilesCleared, score);
         }
 
         /// <summary>
@@ -139,12 +153,16 @@ namespace IslandQuest.Match3
         {
             int rounds = 0;
             int creditBagsCollected = 0;
+            int tilesCleared = 0;
+            int score = 0;
 
             var seedCells = new HashSet<(int Row, int Col)>(initialClearedCells);
             if (seedCells.Count > 0)
             {
                 ExpandBoosterChain(board, seedCells, rng);
                 creditBagsCollected += CountClearedCreditBags(board, seedCells);
+                tilesCleared += seedCells.Count;
+                score += ScoringRules.RoundScore(seedCells.Count, rounds + 1);
                 ClearGravityRefill(board, seedCells, config, rng);
                 rounds++;
             }
@@ -165,6 +183,8 @@ namespace IslandQuest.Match3
 
                 var clearedCells = DetermineClearedCells(board, groups, rng);
                 creditBagsCollected += CountClearedCreditBags(board, clearedCells);
+                tilesCleared += clearedCells.Count;
+                score += ScoringRules.RoundScore(clearedCells.Count, rounds + 1);
 
                 ClearGravityRefill(board, clearedCells, config, rng);
                 rounds++;
@@ -175,7 +195,7 @@ namespace IslandQuest.Match3
             if (dropBag)
                 DropOneBonusBag(board, rng);
 
-            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected);
+            return new CascadeResult(rounds, bonusCredits, dropBag, creditBagsCollected, tilesCleared, score);
         }
 
         /// <summary>
