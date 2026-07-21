@@ -6,10 +6,12 @@ without the person re-explaining the project.
 
 ## What this project is
 
-Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD
-(`specs/` has the derived spec docs; the original .docx GDD is not in this
-folder — ask the user to re-upload it if you need to check something against
-the primary source that isn't already captured in `requirements.md`).
+Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD. The
+primary-source GDD now lives in the repo at
+`docs/gdd/IslandQuest_GDD_v2_1.docx` (with `docs/gdd/README.md` noting what it
+does and doesn't specify); `specs/` holds the derived spec docs. Check the
+GDD directly when a spec detail is ambiguous — extract its text with
+`unzip -p docs/gdd/IslandQuest_GDD_v2_1.docx word/document.xml`.
 
 **Repo**: `https://github.com/oran1980/IslandQuest` (public).
 
