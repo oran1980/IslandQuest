@@ -265,28 +265,27 @@ handful of sample levels.
 
 This is the remaining M1 content target from GDD §12.1 ("Working Match-3
 board, **30 levels**, lives system, green credit bag drops"). Task 10
-delivered Island 1 (Levels 1–5); this requirement completes the catalog.
+delivered a 5-level sample; this requirement completes the catalog to 30.
 
-**Structure decision (not GDD-derived — the GDD says "30 levels" but doesn't
-prescribe grouping):** 6 islands × 5 levels = 30, `LevelNumber` running 1–5
-*within* each island (so a level is uniquely identified by the
-`(Island, LevelNumber)` pair, and its global position is
-`(Island − 1) × 5 + LevelNumber`). This matches Island 1's existing shape
-(`LevelNumber` 1–5) rather than renumbering it 1–30.
+**Structure (per GDD §8.2 — corrected):** the GDD's island map puts **Island
+1, "Coconut Isle", at Levels 1–30** (Island 2 "Ember Peak" = 31–70, Island 3
+"Coral Abyss" = 71–120 — later milestones). So the entire M1 catalog is
+**Island 1, Levels numbered 1–30 globally**. (An earlier draft of this
+requirement grouped the 30 as 6 islands × 5 — that contradicted GDD §8.2 and
+was corrected; see design.md's correction log.)
 
 **Acceptance criteria**
 
-1. THE SYSTEM SHALL expose exactly **30** `LevelData` entries across **6**
-   islands, each island holding exactly **5** levels numbered 1–5.
+1. THE SYSTEM SHALL expose exactly **30** `LevelData` entries, all in
+   **Island 1**, with `LevelNumber` 1–30 in ascending order.
 2. Every level SHALL satisfy the same validity invariants Task 10 already
    enforces per level: a positive move limit, at least 3 distinct allowed
    tile types, and `0 ≤ MinInitialCreditBags ≤ MaxInitialCreditBags`.
 3. Each `(Island, LevelNumber)` pair SHALL be unique across the catalog.
-4. The catalog SHALL ramp in difficulty island-over-island: the hardest
-   `Score` target and the hardest `Collect` target in island *N+1* SHALL be
-   ≥ those in island *N* (a monotone-per-island curve; within an island the
-   individual levels may still vary). Move limits generally tighten in later
-   islands. These specific numbers are a design choice, not GDD-derived, and
-   are documented in design.md's level-catalog section.
-5. Island 1's existing five levels (Task 10) SHALL be unchanged — this
-   requirement only *adds* Islands 2–6.
+4. The catalog SHALL ramp in difficulty across the 30 levels: reading levels
+   in order, each `Score` target SHALL be ≥ the previous `Score` level's, and
+   each `Collect` target ≥ the previous `Collect` level's (a monotone curve;
+   move limits generally tighten toward Level 30). These specific numbers are
+   a design choice, not GDD-derived, and are documented in design.md §6.
+5. The original Task 10 sample SHALL remain the gentle on-ramp: Levels 1–5
+   keep their objectives/targets, now as the start of the full island.

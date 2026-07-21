@@ -867,14 +867,16 @@ Run("Task8: time until next heart returns zero when due", () =>
 
 Console.WriteLine("--- Task 10: ScriptableObject level data for Island 1, Levels 1-5 ---");
 
-Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
+Run("Task10: Island 1 Levels 1-5 (the original sample) are present and valid", () =>
 {
-    var levels = LevelData.Island1Levels;
-    Assert(levels.Count == 5, $"expected 5 Island 1 levels, got {levels.Count}");
+    // Island 1 now spans all 30 levels (GDD §8.2); this test still guards the
+    // original Task 10 sample — the first five levels of the island.
+    var island1 = LevelData.Island1Levels;
+    Assert(island1.Count >= 5, $"expected at least 5 Island 1 levels, got {island1.Count}");
 
-    for (int index = 0; index < levels.Count; index++)
+    for (int index = 0; index < 5; index++)
     {
-        var level = levels[index];
+        var level = island1[index];
         Assert(level.Island == 1, $"level {index + 1}: expected island 1, got {level.Island}");
         Assert(level.LevelNumber == index + 1, $"level {index + 1}: expected level number {index + 1}, got {level.LevelNumber}");
         Assert(level.MoveLimit > 0, $"level {index + 1}: move limit must be positive");
@@ -884,27 +886,27 @@ Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
     }
 });
 
-Console.WriteLine("--- Task 12: Full level catalog — Islands 2-6 (Levels 6-30) ---");
+Console.WriteLine("--- Task 12: Full level catalog — Island 1, Levels 1-30 (GDD §8.2) ---");
 
-Run("Task12: catalog exposes exactly 30 levels across 6 islands of 5", () =>
+Run("Task12: catalog is 30 levels, all Island 1, numbered 1-30 in order", () =>
 {
-    Assert(LevelData.IslandCount == 6, $"expected 6 islands, got {LevelData.IslandCount}");
-    Assert(LevelData.LevelsPerIsland == 5, $"expected 5 levels per island, got {LevelData.LevelsPerIsland}");
+    Assert(LevelData.LevelCount == 30, $"expected LevelCount 30, got {LevelData.LevelCount}");
     Assert(LevelData.AllLevels.Count == 30, $"expected 30 levels total, got {LevelData.AllLevels.Count}");
+    for (int i = 0; i < LevelData.AllLevels.Count; i++)
+    {
+        var level = LevelData.AllLevels[i];
+        Assert(level.Island == 1, $"{level.Name}: GDD §8.2 puts all M1 levels in Island 1, got island {level.Island}");
+        Assert(level.LevelNumber == i + 1, $"entry {i}: expected level number {i + 1}, got {level.LevelNumber}");
+    }
 });
 
-Run("Task12: every island has 5 levels numbered 1-5", () =>
+Run("Task12: IslandLevels(1) returns all 30 and Island1Levels matches it", () =>
 {
-    for (int island = 1; island <= LevelData.IslandCount; island++)
-    {
-        var levels = LevelData.IslandLevels(island);
-        Assert(levels.Count == 5, $"island {island}: expected 5 levels, got {levels.Count}");
-        for (int i = 0; i < levels.Count; i++)
-        {
-            Assert(levels[i].Island == island, $"island {island} entry {i}: wrong island {levels[i].Island}");
-            Assert(levels[i].LevelNumber == i + 1, $"island {island} entry {i}: expected level number {i + 1}, got {levels[i].LevelNumber}");
-        }
-    }
+    var island1 = LevelData.IslandLevels(1);
+    Assert(island1.Count == 30, $"Island 1 should hold all 30 M1 levels, got {island1.Count}");
+    Assert(LevelData.Island1Levels.Count == 30, $"Island1Levels should be all 30, got {LevelData.Island1Levels.Count}");
+    // No other island has authored content in M1.
+    Assert(LevelData.IslandLevels(2).Count == 0, "Island 2 (Levels 31-70) is a later milestone — not authored in M1");
 });
 
 Run("Task12: all 30 levels satisfy the per-level validity invariants", () =>
@@ -926,41 +928,23 @@ Run("Task12: each (Island, LevelNumber) pair is unique", () =>
     Assert(seen.Count == 30, $"expected 30 unique level identities, got {seen.Count}");
 });
 
-Run("Task12: difficulty ramps island-over-island (max Score & Collect targets non-decreasing)", () =>
+Run("Task12: difficulty ramps across the 30 levels (Score & Collect targets non-decreasing in order)", () =>
 {
-    int prevMaxScore = 0;
-    int prevMaxCollect = 0;
-    for (int island = 1; island <= LevelData.IslandCount; island++)
+    int prevScore = 0;
+    int prevCollect = 0;
+    foreach (var level in LevelData.AllLevels)
     {
-        var levels = LevelData.IslandLevels(island);
-        int maxScore = 0;
-        int maxCollect = 0;
-        foreach (var level in levels)
+        if (level.Objective.Type == LevelObjectiveType.Score)
         {
-            if (level.Objective.Type == LevelObjectiveType.Score)
-                maxScore = Math.Max(maxScore, level.Objective.Target);
-            else if (level.Objective.Type == LevelObjectiveType.Collect)
-                maxCollect = Math.Max(maxCollect, level.Objective.Target);
+            Assert(level.Objective.Target >= prevScore, $"{level.Name}: Score target {level.Objective.Target} dropped below the previous Score level's {prevScore}");
+            prevScore = level.Objective.Target;
         }
-        Assert(maxScore >= prevMaxScore, $"island {island}: max Score target {maxScore} dropped below island {island - 1}'s {prevMaxScore}");
-        Assert(maxCollect >= prevMaxCollect, $"island {island}: max Collect target {maxCollect} dropped below island {island - 1}'s {prevMaxCollect}");
-        prevMaxScore = maxScore;
-        prevMaxCollect = maxCollect;
+        else if (level.Objective.Type == LevelObjectiveType.Collect)
+        {
+            Assert(level.Objective.Target >= prevCollect, $"{level.Name}: Collect target {level.Objective.Target} dropped below the previous Collect level's {prevCollect}");
+            prevCollect = level.Objective.Target;
+        }
     }
-});
-
-Run("Task12: Island1Levels is unchanged and derives from the catalog", () =>
-{
-    var island1 = LevelData.Island1Levels;
-    Assert(island1.Count == 5, $"expected 5 Island 1 levels, got {island1.Count}");
-    foreach (var level in island1)
-        Assert(level.Island == 1, $"Island1Levels contains a non-island-1 entry: {level.Name}");
-    // Same entries as IslandLevels(1).
-    var viaAll = LevelData.IslandLevels(1);
-    Assert(viaAll.Count == island1.Count, "Island1Levels and IslandLevels(1) should match in size");
-    for (int i = 0; i < island1.Count; i++)
-        Assert(island1[i].LevelNumber == viaAll[i].LevelNumber && island1[i].Objective.Target == viaAll[i].Objective.Target,
-            $"Island1Levels[{i}] should equal IslandLevels(1)[{i}]");
 });
 
 Console.WriteLine("--- Task 11: Manual booster activation via swap (Requirement 5c) ---");

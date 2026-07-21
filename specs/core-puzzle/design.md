@@ -363,31 +363,41 @@ The GDD (§12.1) fixes the M1 content target at "30 levels" but doesn't
 prescribe how they're grouped, difficulty numbers, or objective mix — those
 are design choices, recorded here.
 
-**Structure.** 6 islands × 5 levels = 30. `LevelNumber` runs 1–5 *within* an
-island (Island 1 already did this in Task 10, so this extends rather than
-renumbers). A level's identity is the `(Island, LevelNumber)` pair; its
-global index is `(Island − 1) × 5 + LevelNumber`. `LevelData.AllLevels` is
-the single source of truth (all 30, in island-then-level order);
-`Island1Levels` and `IslandLevels(n)` are views over it, so there's no
-duplicated data and Task 10's `Island1Levels` test keeps passing unchanged.
+**Structure (GDD §8.2).** The GDD's island map assigns **Island 1 ("Coconut
+Isle") to Levels 1–30** — so the whole M1 catalog is one island, with
+`LevelNumber` running 1–30 globally. (Islands 2–3, Levels 31–70 / 71–120, are
+later milestones and aren't authored here.) `LevelData.AllLevels` is the
+single source of truth (all 30, in level order); `Island1Levels` (the whole
+catalog) and `IslandLevels(n)` are views over it. `LevelCount` = 30.
 
-**Objective rhythm per island.** Score → Collect → Score → Collect →
-ClearBoard (mirrors Island 1's existing pattern), so every island ends on a
-board-clear and alternates the two metered objective types.
+**Objective rhythm.** Score → Collect → Score → Collect → ClearBoard,
+repeating every 5 levels, so each block ends on a board-clear and alternates
+the two metered objective types across the 30. (The objective *types*
+themselves — Score/Collect/ClearBoard — are an implementation-era invention,
+not GDD-specified; see the note below.)
 
 **Difficulty levers, and how they ramp.** Nothing here is GDD-derived; the
-goal is a monotone-per-island curve that the verify suite guards
-(`Task12: difficulty ramps island-over-island`):
+goal is a monotone curve across Levels 1–30 that the verify suite guards
+(`Task12: difficulty ramps across the 30 levels`):
 
-- *Score targets* climb island-over-island — the hardest Score target per
-  island is 850 → 1300 → 2000 → 2800 → 3800 → 4800.
-- *Collect targets* likewise — 12 → 16 → 20 → 26 → 32 → 40.
-- *Move limits* generally tighten in later islands (down to 14 on Island 6's
-  hardest level) — less slack to hit a rising target.
-- *Allowed tile types*: early islands sometimes drop to 4–5 types (fewer
-  types → more incidental matches → gentler); Islands 4–6 use all six
-  throughout. More colors means each specific match is rarer, so the same
-  target is harder to reach.
+- *Score targets* climb level-over-level, 500 → 4800 (500, 850, 1000, …, 4800).
+- *Collect targets* likewise, 8 → 40.
+- *Move limits* generally tighten toward Level 30 (down to 14) — less slack to
+  hit a rising target.
+- *Allowed tile types*: the earliest levels sometimes drop to 4–5 types
+  (fewer types → more incidental matches → gentler); from the mid-teens on,
+  all six are used throughout. More colors means each specific match is
+  rarer, so the same target is harder to reach.
+
+**Objective semantics are still open.** The GDD (reviewed from
+`docs/gdd/`) frames each level around a single generic "level objective"
+measured as a *percentage* (§7.3), with 1/2/3-star tiers paying 20/35/55
+credits (§6.2). It does **not** define a points-per-tile scoring formula,
+nor enumerate objective types, nor a board-clear goal — so how `Score` is
+actually scored during play, what `Collect` counts, and what `ClearBoard`
+requires are all still undecided (the board refills forever, so `ClearBoard`
+can't mean an empty board). Task 12 only fixes the *catalog data*; making
+these objectives actually playable is the follow-on work.
 
 Credit-bag counts stay at the GDD §7.1 default (1–2 per level) across the
 catalog; they're a reward knob, not a difficulty one, so they weren't used
@@ -408,6 +418,12 @@ data; `LevelDataAsset` remains available for hand-authored Editor overrides.
 - Cascade refill (§3.4): corrected from a speculative matchless-refill rule
   (which would have suppressed real cascades) to plain random refill, before
   Task 4 was implemented.
+- Level catalog structure (§6): Task 12 first grouped the 30 levels as 6
+  islands × 5 (a guess, since the GDD text then in-repo didn't cover
+  grouping). When the primary-source GDD was added to `docs/gdd/`, §8.2 turned
+  out to place **Island 1 at Levels 1–30** (Islands 2–3 are Levels 31–70 /
+  71–120, later milestones). Restructured the catalog to a single Island 1
+  with `LevelNumber` 1–30, and updated the tests, before this branch merged.
 - Manual activation, spent booster (§3.6): the original §3.6 write-up
   described `GetAffectedCellsAimed` and the composition flow but didn't say
   what happens to the *fired* booster tile. During Task 11's review pass an

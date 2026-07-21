@@ -213,18 +213,20 @@ end state, so this is auditable rather than asserted.
     `ManualSwapResult { Triggered, ClearedCells }`, and `CascadeEngine.
     ResolveCascadeFrom(board, initialClearedCells, config, rng)`._
 
-- [x] **12. Full level catalog — Islands 2–6 (Levels 6–30)**
-  - Author the remaining 25 `LevelData` entries so the catalog is the full
-    30 the GDD §12.1 M1 scope calls for (Task 10 delivered Island 1). 6
-    islands × 5 levels; `LevelNumber` 1–5 within each island.
-  - Difficulty ramps island-over-island (rising Score/Collect targets,
-    generally tighter move limits, leaning on all 6 tile types in later
-    islands). Exact numbers are a design choice — see design.md's level
-    catalog section and requirements.md Requirement 6.
-  - Proposed new symbols (data lives in `LevelData.cs`, no `UnityEngine`):
+- [x] **12. Full level catalog — Island 1, Levels 1–30**
+  - Author the full 30-level `LevelData` catalog the GDD §12.1 M1 scope calls
+    for. Per GDD §8.2, all 30 belong to **Island 1 ("Coconut Isle")**, with
+    `LevelNumber` 1–30 globally (Task 10's 5 levels are now the on-ramp).
+  - Difficulty ramps level-over-level (rising Score/Collect targets, tighter
+    move limits toward Level 30, all-6 tile types from the mid-teens on).
+    Exact numbers are a design choice — see design.md §6 and Requirement 6.
+  - New symbols (data lives in `LevelData.cs`, no `UnityEngine`):
     `LevelData.AllLevels` (all 30), `LevelData.IslandLevels(int island)`,
-    `LevelData.IslandCount`, `LevelData.LevelsPerIsland`. `Island1Levels`
-    stays (now derived from `AllLevels`) so Task 10's test is untouched.
+    `LevelData.LevelCount`, `LevelData.Island1`. `Island1Levels` stays (now
+    the whole catalog, derived from `AllLevels`).
+  - _Structure correction: first built as 6 islands × 5; corrected to Island 1
+    = Levels 1–30 once the GDD (added to `docs/gdd/`) was checked against
+    §8.2. See design.md's correction log._
   - _Satisfies: Requirement 6 (all criteria)._
   - _Verification: extends `verify/Program.cs`; see "How Task 12 was
     verified" below._
@@ -607,4 +609,19 @@ Baseline before starting: 67 passed, 0 failed.
      `.asset` files) in design.md §6 rather than building them speculatively —
      neither is required by Requirement 6, and both are cheap follow-ups when
      a level-select/results UI needs them.
+
+**Structure correction (after the GDD was added to the repo).** The steps
+above built the catalog as **6 islands × 5 levels** — a guess made because the
+primary-source GDD wasn't in-repo at the time. Once the GDD was added to
+`docs/gdd/`, §8.2 showed **Island 1 spans Levels 1–30** (Islands 2–3 are
+Levels 31–70 / 71–120, later milestones). Restructured to a single Island 1
+with `LevelNumber` 1–30: replaced `IslandCount`/`LevelsPerIsland` with
+`LevelCount = 30` and an `Island1` constant; `AllLevels` now lists 30
+`island: 1` entries numbered 1–30 (same objective/target/move values, just
+renumbered — the difficulty ramp is now level-over-level instead of
+island-over-island). Updated the Task 12 tests (single-island assertions +
+a level-order monotonic-ramp test) and the Task 10 test (Island 1 now has 30
+levels, so it validates the first 5 rather than asserting the total is 5).
+Re-ran: **72 passed, 0 failed.** Requirements 6 and design.md §6 updated; the
+contradiction is logged in design.md's correction log.
 

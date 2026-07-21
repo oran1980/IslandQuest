@@ -42,9 +42,9 @@ actual Editor.
 and Task 9's Unity presentation layer has been playtested in Unity 6.3 LTS —
 grid render, drag-swap, cascade playback, and manual booster activation all
 confirmed on screen (see `tasks.md` Task 9's playtest log). Task 12 completed
-the M1 content target: the full **30-level catalog** (6 islands × 5 levels) now
-lives in `LevelData.AllLevels`, with a difficulty curve documented in
-design.md §6. This completes the M1 "Working Match-3 board" milestone
+the M1 content target: the full **30-level catalog** (Island 1, Levels 1–30
+per GDD §8.2) now lives in `LevelData.AllLevels`, with a difficulty curve
+documented in design.md §6. This completes the M1 "Working Match-3 board" milestone
 (working board + 30 levels + lives + green credit-bag drops, GDD §12.1).
 
 Current branch for the next phase: `feature/levels-6-30`.
