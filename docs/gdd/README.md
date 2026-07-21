@@ -1,11 +1,15 @@
 # Game Design Document (primary source)
 
-- **`IslandQuest_GDD_v2_1.docx`** — the authoritative IslandQuest GDD, v2.1.
+- **`IslandQuest_GDD_v2_1.docx`** — the authoritative IslandQuest GDD, v2.1
+  (binary; open in Word/Pages/LibreOffice).
+- **`IslandQuest_GDD_v2_1.md`** — a plain-Markdown export of the same
+  document, for easy reading, `grep`, and git diffs. Regenerate it from the
+  `.docx` if the source changes. **If the two ever disagree, the `.docx` is
+  authoritative.**
 
 This is the primary source the `specs/` folder is derived from. When a spec
-detail is ambiguous or seems wrong, check it against this document first
-(it's binary — open in Word/Pages/LibreOffice, or extract text with
-`unzip -p IslandQuest_GDD_v2_1.docx word/document.xml`).
+detail is ambiguous or seems wrong, check it here first — the `.md` is the
+quickest way in.
 
 ## Notes / known gaps (things the GDD does *not* specify)
 
