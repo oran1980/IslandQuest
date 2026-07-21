@@ -124,15 +124,35 @@ end state, so this is auditable rather than asserted.
     manual activation fires.
   - First task that's allowed to reference `UnityEngine`.
   - _Implementation: `Assets/Scripts/BoardController.cs` and `Assets/Scripts/BoardTileView.cs`._
-  - _Verification status: the code is written and internally consistent with
-    the now-final core API (which is fully covered by the green `verify/`
-    suite), but because it is a `UnityEngine`-dependent MonoBehaviour it can
-    only be compiled/run inside the Unity Editor — which isn't runnable in
-    this headless environment (`verify/` deliberately excludes UnityEngine
-    files). Left as `[~]` rather than `[x]`: the remaining step is a manual
-    Editor playtest (open the project in Unity 6.3 LTS, press Play, confirm
-    tile spawn, drag-swap, cascade playback, and a manual booster swap all
-    behave). No auto-verification claim is made for this task._
+  - _Scene/prefab wiring (confirmed by reading the YAML): `scene1.unity` has
+    a `BoardController` GameObject with `tilePrefab`→`Tile.prefab` and
+    `tilesParent` wired (`levelDataAsset` left null → falls back to a default
+    `BoardConfig`, which is fine), a `TilesParent`, an orthographic Main
+    Camera framed on a 9×9 board (pos 4.4,-4.4,-10; size 5) carrying a
+    `Physics2DRaycaster`, and an `EventSystem` with `InputSystemUIInputModule`.
+    `Tile.prefab` = `SpriteRenderer` + `BoxCollider2D` (needed for the 2D
+    raycaster to hit sprites) + `BoardTileView` (its `_spriteRenderer`/
+    `_labelText` wired) + a `TextMesh` label child. So the drag-input path has
+    every component it needs._
+  - _Verification via the live Editor (the project was open in Unity 6.3 LTS
+    while this ran, so a headless batch compile couldn't take the project
+    lock; instead the running Editor's `Logs/Editor.log` was read directly):
+    scripts **compile cleanly against real `UnityEngine`** — `CompileScripts:
+    648ms`, `domain reloads=1`, and zero `error CS####` — which is the one
+    thing `verify/` structurally can't check. The Editor then **entered Play
+    Mode with the scene loaded** (Unity refuses to enter Play Mode with
+    compiler errors) and logged **no runtime exceptions** — no
+    `NullReferenceException`, and notably no `UnassignedReferenceException`
+    (which would fire if the serialized refs were unwired), so
+    `Start()`→`BoardGenerator.Generate()`→`CreateBoardViews()` ran clean. (The
+    only "error" lines in the log are unrelated Unity licensing/Connect 401
+    noise.)_
+  - _Still `[~]`, not `[x]`: everything a log can prove is green, but the
+    actual point of this task — that tiles render in a grid and that
+    drag-swap, cascade playback, and a manual booster swap all **look/behave
+    right on screen** — needs a human watching the Game view. That's the one
+    remaining confirmation; see the checklist in the session notes. Flip to
+    `[x]` once eyeballed._
 
 - [x] **10. `ScriptableObject` level data for Island 1, Levels 1-5**
   - `LevelData` asset definitions (objective, move limit, allowed tile
