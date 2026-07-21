@@ -231,6 +231,33 @@ end state, so this is auditable rather than asserted.
   - _Verification: extends `verify/Program.cs`; see "How Task 12 was
     verified" below._
 
+- [ ] **13. Scoring rule** (Requirement 7 crit. 1)
+  - `ScoringRules` (10 pts/tile × cascade-round combo multiplier). Surface
+    `Score` and `TilesCleared` on `CascadeResult`, accumulated in both
+    `ResolveCascade` and `ResolveCascadeFrom`. Engine, verify-testable.
+
+- [ ] **14. Difficulty tiers, reward scaling & objective-type revision**
+    (Requirement 7 crit. 2–4, 6–8)
+  - Add a `Difficulty` enum (Easy/Hard/VeryHard) to `LevelData`; tag all 30
+    levels. Reward = star base (20/35/55) × difficulty multiplier — extend
+    `LevelEvaluator`. Revise objective types: keep `Score`/`Collect`
+    (Collect = tiles cleared), replace `ClearBoard` with `CollectBags`
+    (seed the target bag count). Engine + data, verify-testable.
+
+- [ ] **15. Level session — moves, progress, win/loss** (Requirement 7 crit. 5)
+  - A `LevelSession` that consumes each move's `CascadeResult`, accumulates
+    score / tiles-cleared / bags-collected into a `LevelProgress`, counts
+    moves against the limit, and reports win (objective met) / loss (out of
+    moves) plus the final `LevelResult` (stars + credits). Engine,
+    verify-testable — the "missing middle" that makes a level actually
+    playable to completion.
+
+- [ ] **16. Unity level-select + results UI**
+  - Level-select screen (levels with difficulty labels / star records) →
+    load the chosen `LevelData` into `BoardController` + a `LevelSession`;
+    a results panel (stars, credits earned) with replay/next. MonoBehaviours
+    + scene(s); Editor playtest (like Task 9).
+
 ---
 
 ## How Task 1 was verified

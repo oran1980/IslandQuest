@@ -289,3 +289,54 @@ was corrected; see design.md's correction log.)
    a design choice, not GDD-derived, and are documented in design.md §6.
 5. The original Task 10 sample SHALL remain the gentle on-ramp: Levels 1–5
    keep their objectives/targets, now as the start of the full island.
+
+## Requirement 7 — Level Play: Scoring, Objectives, Difficulty & Rewards
+
+**User story:** As a player, I want each level to have a clear goal, a fair
+number of moves, and a reward that's bigger on harder levels, so finishing a
+tough level feels worth it.
+
+**Provenance:** the GDD frames a level around a single generic "objective"
+measured as a percentage (§7.3) and pays a flat 1/2/3-star credit reward
+(§6.2: 20/35/55). It does **not** define a scoring formula, objective types,
+or difficulty-scaled rewards. The rules below were chosen with the product
+owner (a Homescapes-style model) and are design decisions, not GDD-derived —
+documented in design.md's level-play section.
+
+**Scoring**
+
+1. WHEN tiles are cleared THE SYSTEM SHALL award **10 points per cleared
+   tile**, multiplied by the cascade **combo round** (round 1 = ×1, round 2 =
+   ×2, …), so deeper cascades score more. A move's score is the sum over its
+   cascade rounds.
+
+**Objective types** (each level has exactly one)
+
+2. `Score` — complete WHEN the level's accumulated score ≥ the target.
+3. `Collect` — complete WHEN the cumulative count of tiles cleared ≥ the
+   target.
+4. `CollectBags` — complete WHEN all of the level's green credit bags have
+   been collected. The level SHALL seed exactly the target number of bags at
+   generation so the objective is always attainable (this replaces the former
+   `ClearBoard`, which was unwinnable on an infinitely-refilling board).
+
+**Move limit & loss**
+
+5. A level SHALL end in **loss** IF the move limit is reached before the
+   objective is complete, and in **win** as soon as the objective completes.
+
+**Difficulty & reward**
+
+6. Every level SHALL carry a difficulty tier: `Easy`, `Hard`, or `VeryHard`,
+   generally rising across Levels 1–30.
+7. On a win THE SYSTEM SHALL pay green credits = the star base (GDD §6.2:
+   20/35/55 for 1/2/3 stars) × a difficulty multiplier (`Easy` ×1.0, `Hard`
+   ×1.5, `VeryHard` ×2.0), rounded. (Multipliers are tunable balance values.)
+8. Star count SHALL come from the level's star thresholds against the
+   objective's performance value (existing `LevelStarThresholds` /
+   `LevelEvaluator`); 1 star means the objective was met, 2–3 mean it was
+   exceeded by the level's margins.
+
+*Implementation is sequenced in tasks.md as Tasks 13 (scoring), 14 (difficulty
+tiers + reward + objective-type revision), 15 (level session: moves, progress,
+win/loss), and 16 (Unity level-select + results UI).*
