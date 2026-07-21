@@ -357,6 +357,50 @@ the verify project, not copies — one source of truth). This is a deliberate,
 documented substitution for a conventional test framework, not a shortcut:
 every assertion still really compiles and really executes.
 
+## 6. Level catalog (Requirement 6, Task 12)
+
+The GDD (§12.1) fixes the M1 content target at "30 levels" but doesn't
+prescribe how they're grouped, difficulty numbers, or objective mix — those
+are design choices, recorded here.
+
+**Structure.** 6 islands × 5 levels = 30. `LevelNumber` runs 1–5 *within* an
+island (Island 1 already did this in Task 10, so this extends rather than
+renumbers). A level's identity is the `(Island, LevelNumber)` pair; its
+global index is `(Island − 1) × 5 + LevelNumber`. `LevelData.AllLevels` is
+the single source of truth (all 30, in island-then-level order);
+`Island1Levels` and `IslandLevels(n)` are views over it, so there's no
+duplicated data and Task 10's `Island1Levels` test keeps passing unchanged.
+
+**Objective rhythm per island.** Score → Collect → Score → Collect →
+ClearBoard (mirrors Island 1's existing pattern), so every island ends on a
+board-clear and alternates the two metered objective types.
+
+**Difficulty levers, and how they ramp.** Nothing here is GDD-derived; the
+goal is a monotone-per-island curve that the verify suite guards
+(`Task12: difficulty ramps island-over-island`):
+
+- *Score targets* climb island-over-island — the hardest Score target per
+  island is 850 → 1300 → 2000 → 2800 → 3800 → 4800.
+- *Collect targets* likewise — 12 → 16 → 20 → 26 → 32 → 40.
+- *Move limits* generally tighten in later islands (down to 14 on Island 6's
+  hardest level) — less slack to hit a rising target.
+- *Allowed tile types*: early islands sometimes drop to 4–5 types (fewer
+  types → more incidental matches → gentler); Islands 4–6 use all six
+  throughout. More colors means each specific match is rarer, so the same
+  target is harder to reach.
+
+Credit-bag counts stay at the GDD §7.1 default (1–2 per level) across the
+catalog; they're a reward knob, not a difficulty one, so they weren't used
+to shape the curve.
+
+**Not built here (deferred, not forgotten).** Per-level *star thresholds*
+(`LevelStarThresholds`) still aren't part of `LevelData` — same as Task 10.
+Star rating currently needs thresholds supplied at evaluation time; wiring a
+per-level threshold set into the catalog is a small follow-up once a
+level-select/results UI needs it. Likewise, no per-level ScriptableObject
+`.asset` files are authored — the canonical catalog is the C# `AllLevels`
+data; `LevelDataAsset` remains available for hand-authored Editor overrides.
+
 ### Design correction log
 
 - Booster eligibility (§2): corrected from a speculative shape-based theory

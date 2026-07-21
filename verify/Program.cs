@@ -884,6 +884,85 @@ Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
     }
 });
 
+Console.WriteLine("--- Task 12: Full level catalog — Islands 2-6 (Levels 6-30) ---");
+
+Run("Task12: catalog exposes exactly 30 levels across 6 islands of 5", () =>
+{
+    Assert(LevelData.IslandCount == 6, $"expected 6 islands, got {LevelData.IslandCount}");
+    Assert(LevelData.LevelsPerIsland == 5, $"expected 5 levels per island, got {LevelData.LevelsPerIsland}");
+    Assert(LevelData.AllLevels.Count == 30, $"expected 30 levels total, got {LevelData.AllLevels.Count}");
+});
+
+Run("Task12: every island has 5 levels numbered 1-5", () =>
+{
+    for (int island = 1; island <= LevelData.IslandCount; island++)
+    {
+        var levels = LevelData.IslandLevels(island);
+        Assert(levels.Count == 5, $"island {island}: expected 5 levels, got {levels.Count}");
+        for (int i = 0; i < levels.Count; i++)
+        {
+            Assert(levels[i].Island == island, $"island {island} entry {i}: wrong island {levels[i].Island}");
+            Assert(levels[i].LevelNumber == i + 1, $"island {island} entry {i}: expected level number {i + 1}, got {levels[i].LevelNumber}");
+        }
+    }
+});
+
+Run("Task12: all 30 levels satisfy the per-level validity invariants", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        Assert(level.MoveLimit > 0, $"{level.Name}: move limit must be positive");
+        Assert(level.AllowedTileTypes.Length >= 3, $"{level.Name}: must allow at least 3 tile types");
+        Assert(level.MinInitialCreditBags >= 0, $"{level.Name}: min initial credit bags must be non-negative");
+        Assert(level.MaxInitialCreditBags >= level.MinInitialCreditBags, $"{level.Name}: max credit bags must be >= min");
+    }
+});
+
+Run("Task12: each (Island, LevelNumber) pair is unique", () =>
+{
+    var seen = new HashSet<(int, int)>();
+    foreach (var level in LevelData.AllLevels)
+        Assert(seen.Add((level.Island, level.LevelNumber)), $"duplicate level identity {level.Name}");
+    Assert(seen.Count == 30, $"expected 30 unique level identities, got {seen.Count}");
+});
+
+Run("Task12: difficulty ramps island-over-island (max Score & Collect targets non-decreasing)", () =>
+{
+    int prevMaxScore = 0;
+    int prevMaxCollect = 0;
+    for (int island = 1; island <= LevelData.IslandCount; island++)
+    {
+        var levels = LevelData.IslandLevels(island);
+        int maxScore = 0;
+        int maxCollect = 0;
+        foreach (var level in levels)
+        {
+            if (level.Objective.Type == LevelObjectiveType.Score)
+                maxScore = Math.Max(maxScore, level.Objective.Target);
+            else if (level.Objective.Type == LevelObjectiveType.Collect)
+                maxCollect = Math.Max(maxCollect, level.Objective.Target);
+        }
+        Assert(maxScore >= prevMaxScore, $"island {island}: max Score target {maxScore} dropped below island {island - 1}'s {prevMaxScore}");
+        Assert(maxCollect >= prevMaxCollect, $"island {island}: max Collect target {maxCollect} dropped below island {island - 1}'s {prevMaxCollect}");
+        prevMaxScore = maxScore;
+        prevMaxCollect = maxCollect;
+    }
+});
+
+Run("Task12: Island1Levels is unchanged and derives from the catalog", () =>
+{
+    var island1 = LevelData.Island1Levels;
+    Assert(island1.Count == 5, $"expected 5 Island 1 levels, got {island1.Count}");
+    foreach (var level in island1)
+        Assert(level.Island == 1, $"Island1Levels contains a non-island-1 entry: {level.Name}");
+    // Same entries as IslandLevels(1).
+    var viaAll = LevelData.IslandLevels(1);
+    Assert(viaAll.Count == island1.Count, "Island1Levels and IslandLevels(1) should match in size");
+    for (int i = 0; i < island1.Count; i++)
+        Assert(island1[i].LevelNumber == viaAll[i].LevelNumber && island1[i].Objective.Target == viaAll[i].Objective.Target,
+            $"Island1Levels[{i}] should equal IslandLevels(1)[{i}]");
+});
+
 Console.WriteLine("--- Task 11: Manual booster activation via swap (Requirement 5c) ---");
 
 // Layer 1 — BoosterActivation.GetAffectedCellsAimed (pure, isolated)

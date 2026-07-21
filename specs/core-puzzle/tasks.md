@@ -213,6 +213,22 @@ end state, so this is auditable rather than asserted.
     `ManualSwapResult { Triggered, ClearedCells }`, and `CascadeEngine.
     ResolveCascadeFrom(board, initialClearedCells, config, rng)`._
 
+- [x] **12. Full level catalog — Islands 2–6 (Levels 6–30)**
+  - Author the remaining 25 `LevelData` entries so the catalog is the full
+    30 the GDD §12.1 M1 scope calls for (Task 10 delivered Island 1). 6
+    islands × 5 levels; `LevelNumber` 1–5 within each island.
+  - Difficulty ramps island-over-island (rising Score/Collect targets,
+    generally tighter move limits, leaning on all 6 tile types in later
+    islands). Exact numbers are a design choice — see design.md's level
+    catalog section and requirements.md Requirement 6.
+  - Proposed new symbols (data lives in `LevelData.cs`, no `UnityEngine`):
+    `LevelData.AllLevels` (all 30), `LevelData.IslandLevels(int island)`,
+    `LevelData.IslandCount`, `LevelData.LevelsPerIsland`. `Island1Levels`
+    stays (now derived from `AllLevels`) so Task 10's test is untouched.
+  - _Satisfies: Requirement 6 (all criteria)._
+  - _Verification: extends `verify/Program.cs`; see "How Task 12 was
+    verified" below._
+
 ---
 
 ## How Task 1 was verified
@@ -554,4 +570,41 @@ being improvised.
     unmodified. Not new behavior; re-asserting them in this same batch is
     the proof that adding the `GetAffectedCellsAimed` overload didn't
     disturb the original, already-verified path.
+
+## How Task 12 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 67 passed, 0 failed.
+
+1. RED step: added 6 tests to `verify/Program.cs` referencing
+   `LevelData.AllLevels`, `LevelData.IslandLevels(int)`,
+   `LevelData.IslandCount`, and `LevelData.LevelsPerIsland` — none of which
+   existed. Ran and confirmed a compile failure first: `CS0117: 'LevelData'
+   does not contain a definition for 'IslandCount'` (and the same for
+   `LevelsPerIsland`, `AllLevels`, `IslandLevels`), plus knock-on `CS0019` on
+   `IslandLevels`-as-method-group comparisons. The build failed, as required.
+2. GREEN step: refactored `LevelData` so a single `BuildAllLevels()` produces
+   all 30 entries (Island 1 preserved byte-for-byte via a compact `Lvl(...)`
+   helper), with `IslandCount`/`LevelsPerIsland` constants, an
+   `IslandLevels(int)` view, and `Island1Levels` redefined as `IslandLevels(1)`
+   (single source of truth). Static-initializer order checked: the tile-type
+   sets and `AllLevels` are declared before `Island1Levels`, so the latter's
+   initializer sees a populated catalog. Full suite re-run: **73 passed, 0
+   failed** — the 6 new tests green and Task 10's `Island1Levels` test still
+   green (proving Island 1 is genuinely unchanged, not just re-passing).
+3. REVIEW pass — re-read `LevelData.cs` against Requirement 6's five criteria:
+   - Count/structure (crit. 1): exactly 30 entries, 6 islands × 5, numbered
+     1–5 within each — covered by two tests.
+   - Per-level validity (crit. 2): every entry has moveLimit ≥ 14 (>0), ≥ 4
+     allowed types (≥ 3), and default bags 1–2 (0 ≤ min ≤ max) — covered.
+   - Uniqueness (crit. 3): `(Island, LevelNumber)` HashSet has 30 members.
+   - Difficulty ramp (crit. 4): verified the encoded curve — max Score per
+     island 850→1300→2000→2800→3800→4800, max Collect 12→16→20→26→32→40, both
+     strictly rising; move limits tighten toward Island 6 (14). A test asserts
+     the non-decreasing property so a future edit can't silently break it.
+   - Island 1 unchanged (crit. 5): confirmed by the retained Task 10 test plus
+     a new `Island1Levels`-derives-from-catalog test.
+   - Noted two deliberate non-goals (per-level star thresholds; per-level
+     `.asset` files) in design.md §6 rather than building them speculatively —
+     neither is required by Requirement 6, and both are cheap follow-ups when
+     a level-select/results UI needs them.
 

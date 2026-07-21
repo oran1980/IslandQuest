@@ -256,3 +256,37 @@ Credit bag collection into an actual player balance, level
 objective/star-rating payout (GDD §6.2), and the Lives/Hearts system (GDD
 §7.4) are specified in `tasks.md` as Tasks 6–8 and will get their acceptance
 criteria added to this document when each task starts.
+
+## Requirement 6 — Full Level Catalog (30 levels)
+
+**User story:** As a player, I want a full run of levels to progress through
+with a sensible difficulty ramp, so the game has real content rather than a
+handful of sample levels.
+
+This is the remaining M1 content target from GDD §12.1 ("Working Match-3
+board, **30 levels**, lives system, green credit bag drops"). Task 10
+delivered Island 1 (Levels 1–5); this requirement completes the catalog.
+
+**Structure decision (not GDD-derived — the GDD says "30 levels" but doesn't
+prescribe grouping):** 6 islands × 5 levels = 30, `LevelNumber` running 1–5
+*within* each island (so a level is uniquely identified by the
+`(Island, LevelNumber)` pair, and its global position is
+`(Island − 1) × 5 + LevelNumber`). This matches Island 1's existing shape
+(`LevelNumber` 1–5) rather than renumbering it 1–30.
+
+**Acceptance criteria**
+
+1. THE SYSTEM SHALL expose exactly **30** `LevelData` entries across **6**
+   islands, each island holding exactly **5** levels numbered 1–5.
+2. Every level SHALL satisfy the same validity invariants Task 10 already
+   enforces per level: a positive move limit, at least 3 distinct allowed
+   tile types, and `0 ≤ MinInitialCreditBags ≤ MaxInitialCreditBags`.
+3. Each `(Island, LevelNumber)` pair SHALL be unique across the catalog.
+4. The catalog SHALL ramp in difficulty island-over-island: the hardest
+   `Score` target and the hardest `Collect` target in island *N+1* SHALL be
+   ≥ those in island *N* (a monotone-per-island curve; within an island the
+   individual levels may still vary). Move limits generally tighten in later
+   islands. These specific numbers are a design choice, not GDD-derived, and
+   are documented in design.md's level-catalog section.
+5. Island 1's existing five levels (Task 10) SHALL be unchanged — this
+   requirement only *adds* Islands 2–6.
