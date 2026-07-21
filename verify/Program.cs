@@ -580,6 +580,72 @@ Run("Task13: ResolveCascadeFrom scores the provided first-round cells at round 1
     Assert(result.Score >= 50, $"expected >= 50 points from the first-round clear, got {result.Score}");
 });
 
+Console.WriteLine("--- Task 14: Difficulty tiers, reward scaling, objective revision ---");
+
+Run("Task14: every level has a Difficulty; tiers are non-decreasing and all three appear", () =>
+{
+    bool seenEasy = false, seenHard = false, seenVeryHard = false;
+    int prev = -1;
+    foreach (var level in LevelData.AllLevels)
+    {
+        int d = (int)level.Difficulty;
+        Assert(d >= prev, $"{level.Name}: difficulty {level.Difficulty} dropped below the previous level's tier");
+        prev = d;
+        seenEasy |= level.Difficulty == Difficulty.Easy;
+        seenHard |= level.Difficulty == Difficulty.Hard;
+        seenVeryHard |= level.Difficulty == Difficulty.VeryHard;
+    }
+    Assert(seenEasy && seenHard && seenVeryHard, "all three difficulty tiers should appear across the 30 levels");
+});
+
+Run("Task14: reward = star base x difficulty multiplier (Easy x1, Hard x1.5, VeryHard x2)", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 100);
+    var thresholds = new LevelStarThresholds(oneStar: 100, twoStar: 200, threeStar: 300);
+    var progress = new LevelProgress(score: 250, collected: 0, remainingCount: 0); // 2-star
+
+    var easy = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.Easy);
+    var hard = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.Hard);
+    var vhard = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.VeryHard);
+
+    Assert(easy.Stars == 2 && easy.CreditPayout == 35, $"easy 2-star should pay 35, got {easy.CreditPayout}");
+    Assert(hard.CreditPayout == 53, $"hard 2-star should pay round(35 x 1.5)=53, got {hard.CreditPayout}");
+    Assert(vhard.CreditPayout == 70, $"very-hard 2-star should pay 35 x 2=70, got {vhard.CreditPayout}");
+});
+
+Run("Task14: Evaluate without a difficulty defaults to Easy (x1) — back-compat", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 100);
+    var thresholds = new LevelStarThresholds(100, 200, 300);
+    var progress = new LevelProgress(score: 350, collected: 0, remainingCount: 0); // 3-star
+    var r = LevelEvaluator.Evaluate(objective, thresholds, progress);
+    Assert(r.Stars == 3 && r.CreditPayout == 55, $"default (Easy) 3-star should pay 55, got {r.CreditPayout}");
+});
+
+Run("Task14: CollectBags replaces ClearBoard — positive bag target, complete when none remain", () =>
+{
+    var obj = new LevelObjective(LevelObjectiveType.CollectBags, target: 3);
+    Assert(obj.Type == LevelObjectiveType.CollectBags, "type should be CollectBags");
+    Assert(!obj.IsComplete(new LevelProgress(100, 0, remainingCount: 2)), "2 bags left => not complete");
+    Assert(obj.IsComplete(new LevelProgress(100, 0, remainingCount: 0)), "0 bags left => complete");
+
+    bool threw = false;
+    try { new LevelObjective(LevelObjectiveType.CollectBags, target: 0); }
+    catch (ArgumentOutOfRangeException) { threw = true; }
+    Assert(threw, "CollectBags with target 0 should throw (needs a bag count)");
+});
+
+Run("Task14: CollectBags levels seed exactly their target bag count", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        if (level.Objective.Type != LevelObjectiveType.CollectBags) continue;
+        Assert(level.Objective.Target >= 1, $"{level.Name}: CollectBags needs a positive target");
+        Assert(level.MinInitialCreditBags == level.Objective.Target && level.MaxInitialCreditBags == level.Objective.Target,
+            $"{level.Name}: should seed exactly {level.Objective.Target} bags, got [{level.MinInitialCreditBags},{level.MaxInitialCreditBags}]");
+    }
+});
+
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");
 
 Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>
@@ -824,17 +890,17 @@ Run("Task7: collect objective completes when collected items meet the target", (
     Assert(result.CreditPayout == 20, $"expected 20 credit payout for 1 star, got {result.CreditPayout}");
 });
 
-Run("Task7: clear-board objective completes only when remaining count is zero", () =>
+Run("Task7: collect-bags objective completes only when remaining bag count is zero", () =>
 {
-    var objective = new LevelObjective(LevelObjectiveType.ClearBoard, target: 0);
+    var objective = new LevelObjective(LevelObjectiveType.CollectBags, target: 3);
     var thresholds = new LevelStarThresholds(oneStar: 10, twoStar: 20, threeStar: 30);
     var progress = new LevelProgress(score: 75, collected: 0, remainingCount: 0);
 
     var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
 
-    Assert(result.IsComplete, "clear-board objective should be complete when remaining count is zero");
+    Assert(result.IsComplete, "collect-bags objective should be complete when remaining bag count is zero");
     Assert(result.Stars == 3, $"expected 3 stars for score 75 with thresholds 10/20/30, got {result.Stars}");
-    Assert(result.CreditPayout == 55, $"expected 55 credit payout for 3 stars, got {result.CreditPayout}");
+    Assert(result.CreditPayout == 55, $"expected 55 credit payout for 3 stars (Easy default), got {result.CreditPayout}");
 });
 
 Run("Task7: incomplete objective returns zero stars and zero payout", () =>

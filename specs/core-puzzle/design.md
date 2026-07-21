@@ -431,7 +431,7 @@ Booster **spawn** cells are excluded (they aren't cleared); booster
 **chain-swept** cells are included. Kept as a separate pure class so the
 formula is tunable and unit-testable apart from the cascade loop.
 
-### 7.2 Objective types (Task 14 — planned)
+### 7.2 Objective types (Task 14 — done)
 
 Three types, one per level:
 
@@ -441,13 +441,16 @@ Three types, one per level:
   exactly the target bag count at generation so it's always attainable; this
   **replaces `ClearBoard`**, which was unwinnable on a refilling board.
 
-### 7.3 Difficulty & reward (Task 14 — planned)
+### 7.3 Difficulty & reward (Task 14 — done)
 
-Each level carries a `Difficulty` (Easy/Hard/VeryHard), generally rising
-across Levels 1–30. Reward credits = the GDD §6.2 star base (20/35/55) × a
-difficulty multiplier (Easy ×1.0, Hard ×1.5, VeryHard ×2.0), rounded — a
-documented extension of the GDD's flat payout so harder levels pay more.
-Multipliers are balance values, tunable.
+Each level carries a `Difficulty` (Easy/Hard/VeryHard), rising in thirds
+across Levels 1–30 (Easy 1–10, Hard 11–20, VeryHard 21–30). `LevelEvaluator`
+pays reward credits = the GDD §6.2 star base (20/35/55) × a difficulty
+multiplier (Easy ×1.0, Hard ×1.5, VeryHard ×2.0), rounded away-from-zero — a
+documented extension of the GDD's flat payout so harder levels pay more (e.g.
+Hard 2★ = 53, VeryHard 3★ = 110). Multipliers are balance values, tunable.
+`ClearBoard` was replaced by `CollectBags` (target = bag count; the level
+seeds exactly that many bags so it's always winnable).
 
 ### 7.4 Level session (Task 15 — planned) and UI (Task 16 — planned)
 

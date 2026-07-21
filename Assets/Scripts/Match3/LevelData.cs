@@ -13,6 +13,7 @@ namespace IslandQuest.Match3
         public TileType[] AllowedTileTypes { get; }
         public int MinInitialCreditBags { get; }
         public int MaxInitialCreditBags { get; }
+        public Difficulty Difficulty { get; }
 
         public string Name => $"Island {Island} Level {LevelNumber}";
 
@@ -23,7 +24,8 @@ namespace IslandQuest.Match3
             int moveLimit,
             TileType[] allowedTileTypes,
             int minInitialCreditBags = 1,
-            int maxInitialCreditBags = 2)
+            int maxInitialCreditBags = 2,
+            Difficulty difficulty = Difficulty.Easy)
         {
             if (island < 1)
                 throw new ArgumentOutOfRangeException(nameof(island), "Island must be at least 1.");
@@ -50,6 +52,7 @@ namespace IslandQuest.Match3
             AllowedTileTypes = uniqueTypes;
             MinInitialCreditBags = minInitialCreditBags;
             MaxInitialCreditBags = maxInitialCreditBags;
+            Difficulty = difficulty;
         }
 
         public BoardConfig ToBoardConfig(int? seed = null)
@@ -106,52 +109,60 @@ namespace IslandQuest.Match3
             return result;
         }
 
-        private static LevelData Lvl(int level, LevelObjectiveType type, int target, int moves, TileType[] types)
-            => new LevelData(Island1, level, new LevelObjective(type, target), moves, types);
+        private static LevelData Lvl(int level, LevelObjectiveType type, int target, int moves, TileType[] types, Difficulty difficulty)
+        {
+            // A CollectBags level seeds exactly `target` bags so "collect them
+            // all" is always attainable; every other type keeps the default 1–2.
+            int minBags = type == LevelObjectiveType.CollectBags ? target : 1;
+            int maxBags = type == LevelObjectiveType.CollectBags ? target : 2;
+            return new LevelData(Island1, level, new LevelObjective(type, target), moves, types, minBags, maxBags, difficulty);
+        }
 
         // Island 1 — Coconut Isle, Levels 1–30 (GDD §8.2). One long difficulty
-        // ramp; the Score/Collect/ClearBoard rhythm repeats every 5 levels for
-        // variety. The Levels 1–5 block is the original Task 10 sample, now the
-        // gentle on-ramp of the full island.
+        // ramp; the Score / Collect / CollectBags rhythm repeats every 5 levels
+        // for variety, and the Difficulty tier rises in thirds (Easy 1–10,
+        // Hard 11–20, VeryHard 21–30). Levels 1–5 are the original Task 10
+        // sample, now the gentle on-ramp of the full island.
         private static IReadOnlyList<LevelData> BuildAllLevels()
         {
+            const Difficulty E = Difficulty.Easy, H = Difficulty.Hard, V = Difficulty.VeryHard;
             return new List<LevelData>
             {
-                Lvl(1, LevelObjectiveType.Score, 500, 20, All6),
-                Lvl(2, LevelObjectiveType.Collect, 8, 18, Five),
-                Lvl(3, LevelObjectiveType.Score, 850, 16, Five),
-                Lvl(4, LevelObjectiveType.Collect, 12, 15, Four),
-                Lvl(5, LevelObjectiveType.ClearBoard, 0, 22, All6),
+                Lvl(1, LevelObjectiveType.Score, 500, 20, All6, E),
+                Lvl(2, LevelObjectiveType.Collect, 8, 18, Five, E),
+                Lvl(3, LevelObjectiveType.Score, 850, 16, Five, E),
+                Lvl(4, LevelObjectiveType.Collect, 12, 15, Four, E),
+                Lvl(5, LevelObjectiveType.CollectBags, 3, 22, All6, E),
 
-                Lvl(6, LevelObjectiveType.Score, 1000, 20, All6),
-                Lvl(7, LevelObjectiveType.Collect, 14, 18, Five),
-                Lvl(8, LevelObjectiveType.Score, 1300, 17, All6),
-                Lvl(9, LevelObjectiveType.Collect, 16, 16, Five),
-                Lvl(10, LevelObjectiveType.ClearBoard, 0, 22, All6),
+                Lvl(6, LevelObjectiveType.Score, 1000, 20, All6, E),
+                Lvl(7, LevelObjectiveType.Collect, 14, 18, Five, E),
+                Lvl(8, LevelObjectiveType.Score, 1300, 17, All6, E),
+                Lvl(9, LevelObjectiveType.Collect, 16, 16, Five, E),
+                Lvl(10, LevelObjectiveType.CollectBags, 4, 22, All6, E),
 
-                Lvl(11, LevelObjectiveType.Score, 1600, 19, All6),
-                Lvl(12, LevelObjectiveType.Collect, 18, 17, All6),
-                Lvl(13, LevelObjectiveType.Score, 2000, 16, All6),
-                Lvl(14, LevelObjectiveType.Collect, 20, 15, Five),
-                Lvl(15, LevelObjectiveType.ClearBoard, 0, 21, All6),
+                Lvl(11, LevelObjectiveType.Score, 1600, 19, All6, H),
+                Lvl(12, LevelObjectiveType.Collect, 18, 17, All6, H),
+                Lvl(13, LevelObjectiveType.Score, 2000, 16, All6, H),
+                Lvl(14, LevelObjectiveType.Collect, 20, 15, Five, H),
+                Lvl(15, LevelObjectiveType.CollectBags, 4, 21, All6, H),
 
-                Lvl(16, LevelObjectiveType.Score, 2400, 18, All6),
-                Lvl(17, LevelObjectiveType.Collect, 22, 17, All6),
-                Lvl(18, LevelObjectiveType.Score, 2800, 16, All6),
-                Lvl(19, LevelObjectiveType.Collect, 26, 15, All6),
-                Lvl(20, LevelObjectiveType.ClearBoard, 0, 20, All6),
+                Lvl(16, LevelObjectiveType.Score, 2400, 18, All6, H),
+                Lvl(17, LevelObjectiveType.Collect, 22, 17, All6, H),
+                Lvl(18, LevelObjectiveType.Score, 2800, 16, All6, H),
+                Lvl(19, LevelObjectiveType.Collect, 26, 15, All6, H),
+                Lvl(20, LevelObjectiveType.CollectBags, 5, 20, All6, H),
 
-                Lvl(21, LevelObjectiveType.Score, 3200, 18, All6),
-                Lvl(22, LevelObjectiveType.Collect, 28, 16, All6),
-                Lvl(23, LevelObjectiveType.Score, 3800, 15, All6),
-                Lvl(24, LevelObjectiveType.Collect, 32, 15, All6),
-                Lvl(25, LevelObjectiveType.ClearBoard, 0, 19, All6),
+                Lvl(21, LevelObjectiveType.Score, 3200, 18, All6, V),
+                Lvl(22, LevelObjectiveType.Collect, 28, 16, All6, V),
+                Lvl(23, LevelObjectiveType.Score, 3800, 15, All6, V),
+                Lvl(24, LevelObjectiveType.Collect, 32, 15, All6, V),
+                Lvl(25, LevelObjectiveType.CollectBags, 5, 19, All6, V),
 
-                Lvl(26, LevelObjectiveType.Score, 4200, 17, All6),
-                Lvl(27, LevelObjectiveType.Collect, 34, 16, All6),
-                Lvl(28, LevelObjectiveType.Score, 4800, 15, All6),
-                Lvl(29, LevelObjectiveType.Collect, 40, 14, All6),
-                Lvl(30, LevelObjectiveType.ClearBoard, 0, 18, All6),
+                Lvl(26, LevelObjectiveType.Score, 4200, 17, All6, V),
+                Lvl(27, LevelObjectiveType.Collect, 34, 16, All6, V),
+                Lvl(28, LevelObjectiveType.Score, 4800, 15, All6, V),
+                Lvl(29, LevelObjectiveType.Collect, 40, 14, All6, V),
+                Lvl(30, LevelObjectiveType.CollectBags, 6, 18, All6, V),
             };
         }
     }

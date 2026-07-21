@@ -237,13 +237,14 @@ end state, so this is auditable rather than asserted.
     `ResolveCascade` and `ResolveCascadeFrom`. Engine, verify-testable.
   - _Verification: see "How Task 13 was verified" below._
 
-- [ ] **14. Difficulty tiers, reward scaling & objective-type revision**
+- [x] **14. Difficulty tiers, reward scaling & objective-type revision**
     (Requirement 7 crit. 2–4, 6–8)
   - Add a `Difficulty` enum (Easy/Hard/VeryHard) to `LevelData`; tag all 30
     levels. Reward = star base (20/35/55) × difficulty multiplier — extend
     `LevelEvaluator`. Revise objective types: keep `Score`/`Collect`
     (Collect = tiles cleared), replace `ClearBoard` with `CollectBags`
     (seed the target bag count). Engine + data, verify-testable.
+  - _Verification: see "How Task 14 was verified" below._
 
 - [ ] **15. Level session — moves, progress, win/loss** (Requirement 7 crit. 5)
   - A `LevelSession` that consumes each move's `CascadeResult`, accumulates
@@ -678,3 +679,36 @@ Baseline before starting: 72 passed, 0 failed.
    included since they are. `ScoringRules` guards non-positive inputs. Prior
    cascade tests (Tasks 4/5/6) stayed green, confirming the added accumulation
    didn't disturb existing behavior.
+
+## How Task 14 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 75 passed, 0 failed.
+
+1. RED step: added 6 tests referencing `Difficulty`, `LevelData.Difficulty`,
+   `LevelObjectiveType.CollectBags`, and a difficulty-aware `LevelEvaluator.
+   Evaluate` overload — none existed. Confirmed compile failure first:
+   `CS0103: The name 'Difficulty' does not exist` and `'LevelObjectiveType'
+   does not contain a definition for 'CollectBags'`.
+2. GREEN step:
+   - `LevelObjective.cs`: renamed enum `ClearBoard` → `CollectBags`; simplified
+     validation so all three types require a positive target; `IsComplete`/
+     `PerformanceValue` for `CollectBags` reuse the old `ClearBoard` behavior
+     (`RemainingCount == 0`; performance = score). Added the `Difficulty` enum.
+     `LevelEvaluator.Evaluate` gained an optional `Difficulty` param (default
+     `Easy`) and scales the GDD §6.2 star base by the difficulty multiplier
+     (Easy 1.0 / Hard 1.5 / VeryHard 2.0), rounded away-from-zero.
+   - `LevelData.cs`: added a `Difficulty` field/param; the `Lvl` helper now
+     takes a difficulty and, for `CollectBags` levels, seeds exactly `target`
+     bags (min = max = target) so the objective is attainable. Tagged all 30
+     levels Easy 1–10 / Hard 11–20 / VeryHard 21–30, and gave the six
+     `CollectBags` levels positive bag targets (3,4,4,5,5,6).
+   - `LevelDataAsset.cs`: default `objectiveTarget` 0 → 500 (0 is now invalid),
+     added a `difficulty` field.
+   - Updated the one existing Task 7 test that used `ClearBoard`/target 0 to
+     `CollectBags`/target 3. Full suite: **80 passed, 0 failed** — Tasks 7/10/12
+     stayed green, confirming the enum rename + reward change didn't regress.
+3. REVIEW: confirmed the difficulty ramp is non-decreasing and uses all three
+   tiers; reward rounding matches the documented examples (Hard 2★ = round(35 ×
+   1.5) = 53, VeryHard 3★ = 110); `CollectBags` bag seeds fit `BoardConfig`'s
+   `max ≤ rows×cols` bound; and the default-`Easy` overload keeps the flat
+   20/35/55 payout for callers that don't pass a difficulty.
