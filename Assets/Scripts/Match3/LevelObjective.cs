@@ -4,9 +4,19 @@ namespace IslandQuest.Match3
 {
     public enum LevelObjectiveType
     {
-        Score,
-        Collect,
-        ClearBoard
+        Score,       // reach a points target
+        Collect,     // clear a target count of tiles
+        CollectBags  // collect all of the level's credit bags (Requirement 7)
+    }
+
+    /// <summary>Per-level difficulty tier (Requirement 7). Scales the win
+    /// reward; see <see cref="LevelEvaluator"/>. Order matters — used as an
+    /// ascending rank when checking the catalog's difficulty ramp.</summary>
+    public enum Difficulty
+    {
+        Easy,
+        Hard,
+        VeryHard
     }
 
     public sealed class LevelObjective
@@ -16,16 +26,11 @@ namespace IslandQuest.Match3
 
         public LevelObjective(LevelObjectiveType type, int target)
         {
-            if (type == LevelObjectiveType.Score || type == LevelObjectiveType.Collect)
-            {
-                if (target < 1)
-                    throw new ArgumentOutOfRangeException(nameof(target), "Score and Collect objectives require a positive target.");
-            }
-            else if (type == LevelObjectiveType.ClearBoard)
-            {
-                if (target != 0)
-                    throw new ArgumentOutOfRangeException(nameof(target), "ClearBoard objectives do not use a target value.");
-            }
+            // All three objective types now carry a positive target: a score to
+            // reach, a tile count to clear, or a bag count to collect.
+            if (target < 1)
+                throw new ArgumentOutOfRangeException(nameof(target),
+                    "Objectives require a positive target (score / tile count / bag count).");
 
             Type = type;
             Target = target;
@@ -40,7 +45,8 @@ namespace IslandQuest.Match3
             {
                 LevelObjectiveType.Score => progress.Score >= Target,
                 LevelObjectiveType.Collect => progress.Collected >= Target,
-                LevelObjectiveType.ClearBoard => progress.RemainingCount == 0,
+                // RemainingCount = uncollected objective bags; done at zero.
+                LevelObjectiveType.CollectBags => progress.RemainingCount == 0,
                 _ => throw new InvalidOperationException("Unknown objective type."),
             };
         }
@@ -50,13 +56,12 @@ namespace IslandQuest.Match3
             if (progress is null)
                 throw new ArgumentNullException(nameof(progress));
 
-            return Type switch
-            {
-                LevelObjectiveType.Score => progress.Score,
-                LevelObjectiveType.Collect => progress.Collected,
-                LevelObjectiveType.ClearBoard => progress.Score,
-                _ => throw new InvalidOperationException("Unknown objective type."),
-            };
+            // Stars grade on the universal skill metric — score — regardless of
+            // objective type (Requirement 7 / design.md §7.4). The objective
+            // type only decides the *win* condition (IsComplete); how *well* you
+            // played is always your points. Uniform, and it makes 2–3 stars
+            // meaningful on Collect/CollectBags levels too.
+            return progress.Score;
         }
     }
 
@@ -126,24 +131,42 @@ namespace IslandQuest.Match3
 
     public static class LevelEvaluator
     {
-        public static LevelResult Evaluate(LevelObjective objective, LevelStarThresholds thresholds, LevelProgress progress)
+        public static LevelResult Evaluate(LevelObjective objective, LevelStarThresholds thresholds, LevelProgress progress, Difficulty difficulty = Difficulty.Easy)
         {
             if (objective is null) throw new ArgumentNullException(nameof(objective));
             if (thresholds is null) throw new ArgumentNullException(nameof(thresholds));
             if (progress is null) throw new ArgumentNullException(nameof(progress));
 
             bool completed = objective.IsComplete(progress);
-            int stars = completed ? thresholds.GetStars(objective.PerformanceValue(progress)) : 0;
-            int payout = ComputePayout(stars);
+            // Completing a level always earns at least 1 star; 2–3 come from the
+            // score thresholds (design.md §7.4).
+            int stars = completed ? Math.Max(1, thresholds.GetStars(objective.PerformanceValue(progress))) : 0;
+            int payout = ComputePayout(stars, difficulty);
             return new LevelResult(completed, stars, payout);
         }
 
-        private static int ComputePayout(int stars) => stars switch
+        /// <summary>GDD §6.2 flat star reward (20/35/55) scaled by the level's
+        /// difficulty (Requirement 7): Easy ×1, Hard ×1.5, VeryHard ×2. The
+        /// difficulty scaling is a documented extension of the GDD's flat
+        /// payout — harder levels are worth more.</summary>
+        private static int ComputePayout(int stars, Difficulty difficulty)
         {
-            1 => 20,
-            2 => 35,
-            3 => 55,
-            _ => 0,
+            int baseCredits = stars switch
+            {
+                1 => 20,
+                2 => 35,
+                3 => 55,
+                _ => 0,
+            };
+            return (int)Math.Round(baseCredits * DifficultyMultiplier(difficulty), MidpointRounding.AwayFromZero);
+        }
+
+        private static double DifficultyMultiplier(Difficulty difficulty) => difficulty switch
+        {
+            Difficulty.Easy => 1.0,
+            Difficulty.Hard => 1.5,
+            Difficulty.VeryHard => 2.0,
+            _ => 1.0,
         };
     }
 }

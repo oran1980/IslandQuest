@@ -213,6 +213,66 @@ end state, so this is auditable rather than asserted.
     `ManualSwapResult { Triggered, ClearedCells }`, and `CascadeEngine.
     ResolveCascadeFrom(board, initialClearedCells, config, rng)`._
 
+- [x] **12. Full level catalog — Island 1, Levels 1–30**
+  - Author the full 30-level `LevelData` catalog the GDD §12.1 M1 scope calls
+    for. Per GDD §8.2, all 30 belong to **Island 1 ("Coconut Isle")**, with
+    `LevelNumber` 1–30 globally (Task 10's 5 levels are now the on-ramp).
+  - Difficulty ramps level-over-level (rising Score/Collect targets, tighter
+    move limits toward Level 30, all-6 tile types from the mid-teens on).
+    Exact numbers are a design choice — see design.md §6 and Requirement 6.
+  - New symbols (data lives in `LevelData.cs`, no `UnityEngine`):
+    `LevelData.AllLevels` (all 30), `LevelData.IslandLevels(int island)`,
+    `LevelData.LevelCount`, `LevelData.Island1`. `Island1Levels` stays (now
+    the whole catalog, derived from `AllLevels`).
+  - _Structure correction: first built as 6 islands × 5; corrected to Island 1
+    = Levels 1–30 once the GDD (added to `docs/gdd/`) was checked against
+    §8.2. See design.md's correction log._
+  - _Satisfies: Requirement 6 (all criteria)._
+  - _Verification: extends `verify/Program.cs`; see "How Task 12 was
+    verified" below._
+
+- [x] **13. Scoring rule** (Requirement 7 crit. 1)
+  - `ScoringRules` (10 pts/tile × cascade-round combo multiplier). Surface
+    `Score` and `TilesCleared` on `CascadeResult`, accumulated in both
+    `ResolveCascade` and `ResolveCascadeFrom`. Engine, verify-testable.
+  - _Verification: see "How Task 13 was verified" below._
+
+- [x] **14. Difficulty tiers, reward scaling & objective-type revision**
+    (Requirement 7 crit. 2–4, 6–8)
+  - Add a `Difficulty` enum (Easy/Hard/VeryHard) to `LevelData`; tag all 30
+    levels. Reward = star base (20/35/55) × difficulty multiplier — extend
+    `LevelEvaluator`. Revise objective types: keep `Score`/`Collect`
+    (Collect = tiles cleared), replace `ClearBoard` with `CollectBags`
+    (seed the target bag count). Engine + data, verify-testable.
+  - _Verification: see "How Task 14 was verified" below._
+
+- [x] **15. Level session — moves, progress, win/loss** (Requirement 7 crit. 5)
+  - A `LevelSession` that consumes each move's `CascadeResult`, accumulates
+    score / tiles-cleared / bags-collected into a `LevelProgress`, counts
+    moves against the limit, and reports win (objective met) / loss (out of
+    moves) plus the final `LevelResult` (stars + credits). Engine,
+    verify-testable — the "missing middle" that makes a level actually
+    playable to completion.
+  - _Verification: see "How Task 15 was verified" below._
+
+- [x] **16. Unity level-select + results UI**
+  - Level-select screen (levels with difficulty labels / star records) →
+    load the chosen `LevelData` into `BoardController` + a `LevelSession`;
+    a results panel (stars, credits earned) with replay/next. MonoBehaviours
+    + scene(s); Editor playtest (like Task 9).
+  - **16a — per-level star thresholds (engine, done).** The one engine-side
+    prerequisite the UI needs: each `LevelData` now derives its own
+    `StarThresholds`, and `LevelSession(LevelData)` grades against them. Built
+    RED→GREEN→REVIEW — see "How Task 16a was verified" below. Still verify-only;
+    no `UnityEngine`.
+  - **16b — Unity level-select + results (MonoBehaviours + scene, done).**
+    New scene `Assets/LevelSelect.unity`, `GameFlowController` +
+    `ClickableView`, an in-memory `LevelRecordStore`, and an in-play HUD +
+    dedicated results screen. Editor-playtested through the full loop — see
+    "How Task 16b was verified" below. Visual polish to a Homescapes-grade look
+    is deferred to a separate art/UX ticket (needs art assets + a uGUI/TMP
+    pass); the procedural screens are functional and clear but flat-shaded.
+
 ---
 
 ## How Task 1 was verified
@@ -555,3 +615,241 @@ being improvised.
     the proof that adding the `GetAffectedCellsAimed` overload didn't
     disturb the original, already-verified path.
 
+## How Task 12 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 67 passed, 0 failed.
+
+1. RED step: added 6 tests to `verify/Program.cs` referencing
+   `LevelData.AllLevels`, `LevelData.IslandLevels(int)`,
+   `LevelData.IslandCount`, and `LevelData.LevelsPerIsland` — none of which
+   existed. Ran and confirmed a compile failure first: `CS0117: 'LevelData'
+   does not contain a definition for 'IslandCount'` (and the same for
+   `LevelsPerIsland`, `AllLevels`, `IslandLevels`), plus knock-on `CS0019` on
+   `IslandLevels`-as-method-group comparisons. The build failed, as required.
+2. GREEN step: refactored `LevelData` so a single `BuildAllLevels()` produces
+   all 30 entries (Island 1 preserved byte-for-byte via a compact `Lvl(...)`
+   helper), with `IslandCount`/`LevelsPerIsland` constants, an
+   `IslandLevels(int)` view, and `Island1Levels` redefined as `IslandLevels(1)`
+   (single source of truth). Static-initializer order checked: the tile-type
+   sets and `AllLevels` are declared before `Island1Levels`, so the latter's
+   initializer sees a populated catalog. Full suite re-run: **73 passed, 0
+   failed** — the 6 new tests green and Task 10's `Island1Levels` test still
+   green (proving Island 1 is genuinely unchanged, not just re-passing).
+3. REVIEW pass — re-read `LevelData.cs` against Requirement 6's five criteria:
+   - Count/structure (crit. 1): exactly 30 entries, 6 islands × 5, numbered
+     1–5 within each — covered by two tests.
+   - Per-level validity (crit. 2): every entry has moveLimit ≥ 14 (>0), ≥ 4
+     allowed types (≥ 3), and default bags 1–2 (0 ≤ min ≤ max) — covered.
+   - Uniqueness (crit. 3): `(Island, LevelNumber)` HashSet has 30 members.
+   - Difficulty ramp (crit. 4): verified the encoded curve — max Score per
+     island 850→1300→2000→2800→3800→4800, max Collect 12→16→20→26→32→40, both
+     strictly rising; move limits tighten toward Island 6 (14). A test asserts
+     the non-decreasing property so a future edit can't silently break it.
+   - Island 1 unchanged (crit. 5): confirmed by the retained Task 10 test plus
+     a new `Island1Levels`-derives-from-catalog test.
+   - Noted two deliberate non-goals (per-level star thresholds; per-level
+     `.asset` files) in design.md §6 rather than building them speculatively —
+     neither is required by Requirement 6, and both are cheap follow-ups when
+     a level-select/results UI needs them.
+
+**Structure correction (after the GDD was added to the repo).** The steps
+above built the catalog as **6 islands × 5 levels** — a guess made because the
+primary-source GDD wasn't in-repo at the time. Once the GDD was added to
+`docs/gdd/`, §8.2 showed **Island 1 spans Levels 1–30** (Islands 2–3 are
+Levels 31–70 / 71–120, later milestones). Restructured to a single Island 1
+with `LevelNumber` 1–30: replaced `IslandCount`/`LevelsPerIsland` with
+`LevelCount = 30` and an `Island1` constant; `AllLevels` now lists 30
+`island: 1` entries numbered 1–30 (same objective/target/move values, just
+renumbered — the difficulty ramp is now level-over-level instead of
+island-over-island). Updated the Task 12 tests (single-island assertions +
+a level-order monotonic-ramp test) and the Task 10 test (Island 1 now has 30
+levels, so it validates the first 5 rather than asserting the total is 5).
+Re-ran: **72 passed, 0 failed.** Requirements 6 and design.md §6 updated; the
+contradiction is logged in design.md's correction log.
+
+
+## How Task 13 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 72 passed, 0 failed.
+
+1. RED step: added 3 tests referencing `ScoringRules` and
+   `CascadeResult.TilesCleared`/`.Score` — none existed. Confirmed compile
+   failure first: `CS0103: The name 'ScoringRules' does not exist` and
+   `CS1061: 'CascadeResult' does not contain a definition for 'TilesCleared'`.
+2. GREEN step: added `ScoringRules` (pure: `PointsPerTile = 10`, `RoundScore =
+   tiles × 10 × comboRound`), added `TilesCleared`/`Score` to `CascadeResult`,
+   and accumulated both per round in `ResolveCascade` and `ResolveCascadeFrom`
+   (combo round = `rounds + 1`, so round 1 = ×1). The `CascadeResult`
+   constructor gained two params; only the two production call sites use it,
+   both updated — no test constructs it directly, so nothing else broke.
+3. One test bug found and fixed (not a production bug): the cascade test first
+   asserted a row-of-4 clears 4 tiles, but a 4-match spawns a booster and keeps
+   its spawn cell (Task 5), so it clears 3. Relaxed the floor to 3 and kept the
+   meaningful assertion — combo-weighted `Score ≥ 10 × TilesCleared`. Re-ran:
+   **75 passed, 0 failed.**
+4. REVIEW: booster spawn cells are (correctly) excluded from `TilesCleared`
+   and `Score` since they aren't cleared; booster-chain-swept cells are
+   included since they are. `ScoringRules` guards non-positive inputs. Prior
+   cascade tests (Tasks 4/5/6) stayed green, confirming the added accumulation
+   didn't disturb existing behavior.
+
+## How Task 14 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 75 passed, 0 failed.
+
+1. RED step: added 6 tests referencing `Difficulty`, `LevelData.Difficulty`,
+   `LevelObjectiveType.CollectBags`, and a difficulty-aware `LevelEvaluator.
+   Evaluate` overload — none existed. Confirmed compile failure first:
+   `CS0103: The name 'Difficulty' does not exist` and `'LevelObjectiveType'
+   does not contain a definition for 'CollectBags'`.
+2. GREEN step:
+   - `LevelObjective.cs`: renamed enum `ClearBoard` → `CollectBags`; simplified
+     validation so all three types require a positive target; `IsComplete`/
+     `PerformanceValue` for `CollectBags` reuse the old `ClearBoard` behavior
+     (`RemainingCount == 0`; performance = score). Added the `Difficulty` enum.
+     `LevelEvaluator.Evaluate` gained an optional `Difficulty` param (default
+     `Easy`) and scales the GDD §6.2 star base by the difficulty multiplier
+     (Easy 1.0 / Hard 1.5 / VeryHard 2.0), rounded away-from-zero.
+   - `LevelData.cs`: added a `Difficulty` field/param; the `Lvl` helper now
+     takes a difficulty and, for `CollectBags` levels, seeds exactly `target`
+     bags (min = max = target) so the objective is attainable. Tagged all 30
+     levels Easy 1–10 / Hard 11–20 / VeryHard 21–30, and gave the six
+     `CollectBags` levels positive bag targets (3,4,4,5,5,6).
+   - `LevelDataAsset.cs`: default `objectiveTarget` 0 → 500 (0 is now invalid),
+     added a `difficulty` field.
+   - Updated the one existing Task 7 test that used `ClearBoard`/target 0 to
+     `CollectBags`/target 3. Full suite: **80 passed, 0 failed** — Tasks 7/10/12
+     stayed green, confirming the enum rename + reward change didn't regress.
+3. REVIEW: confirmed the difficulty ramp is non-decreasing and uses all three
+   tiers; reward rounding matches the documented examples (Hard 2★ = round(35 ×
+   1.5) = 53, VeryHard 3★ = 110); `CollectBags` bag seeds fit `BoardConfig`'s
+   `max ≤ rows×cols` bound; and the default-`Easy` overload keeps the flat
+   20/35/55 payout for callers that don't pass a difficulty.
+
+## How Task 15 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 80 passed, 0 failed.
+
+1. RED step: added 7 tests referencing `LevelSession` and the `LevelOutcome`
+   enum — neither existed. Confirmed compile failure first: `LevelOutcome does
+   not exist in the current context` and `The type or namespace name
+   'LevelSession' could not be found`.
+2. GREEN step:
+   - Refined grading so the session's stars are meaningful:
+     `LevelObjective.PerformanceValue` now always returns `progress.Score`
+     (objective type sets only the win condition; score sets the grade), and
+     `LevelEvaluator` floors a completed level at 1 star
+     (`max(1, thresholds.GetStars(score))`). Verified these keep every prior
+     grading test green — the Task 7 Collect test happened to use score 0, so
+     `max(1, GetStars(0)) = 1` still matches its expected 1 star.
+   - Added `LevelSession` + `LevelOutcome`: folds each move's `CascadeResult`
+     into running score/tiles/bags, counts moves, returns Won on objective
+     completion / Lost at move exhaustion, and grades via `LevelEvaluator`.
+     `ApplyMove` throws once the level is over; `CollectBags` remaining bags =
+     `Target − bagsCollected` (clamped).
+   - Full suite: **86 passed, 0 failed** (Tasks 7 and 14 unaffected).
+3. REVIEW: checked the win path (objective met → Won → stars/credits), loss
+   path (moves exhausted incomplete → 0 stars/0 credits), progress
+   accumulation + move countdown, the CollectBags completion path, the 1-star
+   floor on a low-score completion, and the post-over `ApplyMove` guard. The
+   only caller-supplied input the session still needs is the per-level
+   `LevelStarThresholds`; per-level threshold authoring/derivation is deferred
+   to Task 16 (noted in design.md §7.4).
+
+## How Task 16a was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 86 passed, 0 failed. This is the engine-side
+prerequisite for Task 16's UI (the "per-level threshold authoring" Task 15
+deferred); the Unity level-select/results layer (16b) + Editor playtest is
+still pending, so Task 16's box stays unchecked.
+
+1. RED step: added 4 tests referencing `LevelData.StarThresholds` and a new
+   one-arg `LevelSession(LevelData)` ctor — neither existed. Confirmed compile
+   failure first: `CS1061: 'LevelData' does not contain a definition for
+   'StarThresholds'` and `CS7036: no argument given for the required parameter
+   'thresholds' of 'LevelSession(LevelData, LevelStarThresholds)'`.
+2. GREEN step:
+   - `LevelData`: added a `StarThresholds` property set in the constructor from
+     a new private `DeriveStarThresholds(objective)`. Par score anchors 1 star
+     — Score → target, Collect → target×10, CollectBags → target×100 — and 2/3
+     stars are ×1.4 / ×1.9 reaches, with `Math.Max` guaranteeing strict
+     monotonicity even on tiny par scores. The `Lvl` catalog helper and every
+     existing `new LevelData(...)` call get thresholds for free (no signature
+     change, no 90 hand-authored numbers).
+   - `LevelSession`: added a one-arg `LevelSession(LevelData)` ctor that
+     delegates to the existing two-arg ctor with `level.StarThresholds`. The
+     explicit-thresholds ctor is untouched, so all Task 15 tests stay green.
+   - Full suite: **90 passed, 0 failed** (Tasks 7/14/15 unaffected).
+3. REVIEW: thresholds are derived after all constructor validation runs (the
+   objective is already non-null), so no ordering hazard; catalog min par
+   scores (Score 500, Collect 8×10, CollectBags 3×100) all keep the three
+   thresholds strictly increasing without needing the `Math.Max` guard, but the
+   guard makes arbitrary future levels safe too. Documented the anchors and the
+   ×1.4/×1.9 multipliers as first-pass **tunable** balance values in
+   design.md §7.4 — the real 2★/3★ difficulty wants a playtest pass, which
+   naturally folds into 16b's Editor playtest.
+
+## How Task 16b was verified (Unity presentation layer + live Editor playtest)
+
+Like Task 9, this layer references `UnityEngine`, so `verify/` structurally
+can't compile it — the gate is a live Editor playtest in Unity 6.3 LTS. The
+plain-C# slice it stands on (`LevelRecordStore`) *is* in `verify` (5 tests,
+part of the 95-pass suite).
+
+**Design choices (confirmed with the product owner during the playtest):**
+- **Scene approach:** one self-contained scene `Assets/LevelSelect.unity`
+  (single-scene active-toggle, no `SceneManager`/Build-Settings moving parts),
+  reusing Task 9's known-good camera + `Physics2DRaycaster` + EventSystem +
+  `Tile.prefab` wiring verbatim, plus a `Board` root and a `GameFlow` object.
+- **Records:** an in-memory `LevelRecordStore` behind `ILevelRecordStore` — a
+  clean seam for a future `Core/SaveSystem` (out of scope per Task 8); records
+  reset on app restart, which the owner accepted for M1.
+- **Rendering:** the menus/HUD/results are built *procedurally* in code
+  (white-square `SpriteRenderer` + built-in-font `TextMesh`, clicked via
+  `ClickableView` through the same raycaster the tiles use), so the scene YAML
+  stays tiny and low-risk — no fragile per-widget asset wiring.
+
+**New/changed code:**
+- `Assets/Scripts/Match3/LevelRecordStore.cs` (+ `ILevelRecordStore`) — the
+  only verify-tested piece.
+- `Assets/Scripts/GameFlowController.cs` — coordinator: level-select grid →
+  play (drives `BoardController.Initialize` + a `LevelSession`) → in-play HUD →
+  dedicated results screen → replay / next / menu. Reframes the camera between
+  a menu view and a play view (opens a HUD strip above the board).
+- `Assets/Scripts/ClickableView.cs` — reusable world-space click target.
+- `Assets/Scripts/BoardController.cs` — added a `MoveResolved` event (fires the
+  per-committed-move `CascadeResult`), an `InputEnabled` gate, and an
+  `initializeOnStart` opt-out so the coordinator drives it; `scene1` untouched.
+
+**Playtest — DONE (Unity 6.3 LTS, screenshots at each step):**
+1. **Compiles clean** in the Editor (the one thing `verify` can't check).
+2. **Level-select:** the 30-level grid renders — `L#` / difficulty
+   (Easy/Hard/V.Hard, colour-coded green/gold/red) / `n/3` star record — with a
+   title showing total stars. (First pass had oversized, overlapping labels;
+   fixed by shrinking scale + tightening `TextMesh.lineSpacing` and confirmed on
+   screen.)
+3. **Start a level:** clicking a button (procedural collider raycast confirmed
+   working) hides the grid and loads a playable board.
+4. **In-play HUD:** after the owner flagged there was no on-screen objective /
+   score / moves, added a top HUD strip (objective goal, progress toward it,
+   moves remaining, running score) that updates every move — verified live:
+   L1 read `Points 90/500 · Moves 19/20 · Score 90` after one 9-tile clear
+   (scoring rule live), then `540/500` on the winning move.
+5. **Win path:** crossing the score target showed the results screen; L1 win at
+   score 540 graded **1 star** (≥ the 500 par, below the 700 two-star reach)
+   and paid **+20 credits** (Easy ×1) — both matching Tasks 13–15's engine.
+6. **Results screen:** revised per owner feedback into a dedicated, opaque,
+   colour-themed screen (board/HUD hidden) with gold `★` stars, a parchment
+   text card, a placeholder "Mia" hero (win/loss expression + bob animation, a
+   drop-in seam for real art), and Replay / Next / Menu buttons — all confirmed
+   on screen.
+7. **Buttons + record persistence:** Replay reloads the level, Next advances,
+   Menu returns to the grid where the beaten level's star record and the title's
+   total-stars are updated from the `LevelRecordStore`.
+
+**Scope note (agreed):** matching Homescapes-grade visual polish is an
+art-asset + uGUI/TMP workstream, not a code change to flat procedural shapes;
+deferred to a separate ticket. The `LevelRecordStore` (persistence) and the
+Mia hero (art) are both left as clean drop-in seams.
+
+This completes Task 16 and the M1 level-play phase (Requirement 7, Tasks 13–16).

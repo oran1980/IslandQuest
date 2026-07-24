@@ -33,6 +33,19 @@ void Assert(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
+void AssertThrows<TException>(Action action, string message) where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new Exception($"expected {typeof(TException).Name} but none was thrown: {message}");
+}
+
 Console.WriteLine("IslandQuest.Match3 — Task 1 verification");
 Console.WriteLine("=========================================");
 
@@ -529,6 +542,301 @@ Run("Task4: ResolveCascade throws if maxRounds is exceeded (defensive cap)", () 
     Assert(threw, "expected ResolveCascade to throw when it can't finish within maxRounds");
 });
 
+Console.WriteLine("--- Task 13: Scoring rule (10/tile x combo) ---");
+
+Run("Task13: ScoringRules.RoundScore is 10/tile times the 1-based combo round", () =>
+{
+    Assert(ScoringRules.PointsPerTile == 10, $"expected 10 points per tile, got {ScoringRules.PointsPerTile}");
+    Assert(ScoringRules.RoundScore(5, 1) == 50, $"5 tiles in round 1 should score 50, got {ScoringRules.RoundScore(5, 1)}");
+    Assert(ScoringRules.RoundScore(5, 2) == 100, $"5 tiles in round 2 (x2) should score 100, got {ScoringRules.RoundScore(5, 2)}");
+    Assert(ScoringRules.RoundScore(3, 3) == 90, $"3 tiles in round 3 (x3) should score 90, got {ScoringRules.RoundScore(3, 3)}");
+    Assert(ScoringRules.RoundScore(0, 4) == 0, "zero tiles scores zero");
+});
+
+Run("Task13: ResolveCascade reports TilesCleared and a combo-weighted Score", () =>
+{
+    // Engineered telescoping board (mirrors the Task 4 chain test): a single
+    // Leaf 4-match at row 0 clears, and compaction forces a second-round match,
+    // so we get >=2 rounds and can assert Score reflects the combo weighting.
+    var config = new BoardConfig(rows: 4, columns: 4, seed: 44);
+    var board = new Board(4, 4);
+    var cycle = new[] { TileType.Wave, TileType.Sun, TileType.Coral };
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            board[r, c] = new Tile(cycle[(r + c) % 3]);
+    // Force a Leaf row-of-4 at row 0.
+    for (int c = 0; c < 4; c++)
+        board[0, c] = new Tile(TileType.Leaf);
+
+    var result = CascadeEngine.ResolveCascade(board, config, new Random(44));
+    Assert(result.Rounds >= 1, "expected at least one cascade round");
+    // A 4-match spawns a booster and keeps its spawn cell (Task 5), so the
+    // row-of-4 clears 3 tiles that round — assert on that floor, not 4.
+    Assert(result.TilesCleared >= 3, $"expected at least 3 tiles cleared, got {result.TilesCleared}");
+    Assert(result.Score >= ScoringRules.PointsPerTile * result.TilesCleared,
+        $"combo-weighted score {result.Score} must be >= flat 10/tile baseline for {result.TilesCleared} tiles");
+});
+
+Run("Task13: ResolveCascadeFrom scores the provided first-round cells at round 1", () =>
+{
+    var config = new BoardConfig(rows: 5, columns: 5, seed: 5);
+    var board = new Board(5, 5);
+    var cycle = new[] { TileType.Flower, TileType.Leaf, TileType.Wave };
+    for (int r = 0; r < 5; r++)
+        for (int c = 0; c < 5; c++)
+            board[r, c] = new Tile(cycle[(r + c) % 3]);
+
+    var cleared = new HashSet<(int Row, int Col)> { (2, 0), (2, 1), (2, 2), (2, 3), (2, 4) };
+    var result = CascadeEngine.ResolveCascadeFrom(board, cleared, config, new Random(5));
+    // The 5 provided cells clear in round 1 (x1) => at least 5 * 10 = 50 points.
+    Assert(result.TilesCleared >= 5, $"expected >= 5 tiles cleared, got {result.TilesCleared}");
+    Assert(result.Score >= 50, $"expected >= 50 points from the first-round clear, got {result.Score}");
+});
+
+Console.WriteLine("--- Task 14: Difficulty tiers, reward scaling, objective revision ---");
+
+Run("Task14: every level has a Difficulty; tiers are non-decreasing and all three appear", () =>
+{
+    bool seenEasy = false, seenHard = false, seenVeryHard = false;
+    int prev = -1;
+    foreach (var level in LevelData.AllLevels)
+    {
+        int d = (int)level.Difficulty;
+        Assert(d >= prev, $"{level.Name}: difficulty {level.Difficulty} dropped below the previous level's tier");
+        prev = d;
+        seenEasy |= level.Difficulty == Difficulty.Easy;
+        seenHard |= level.Difficulty == Difficulty.Hard;
+        seenVeryHard |= level.Difficulty == Difficulty.VeryHard;
+    }
+    Assert(seenEasy && seenHard && seenVeryHard, "all three difficulty tiers should appear across the 30 levels");
+});
+
+Run("Task14: reward = star base x difficulty multiplier (Easy x1, Hard x1.5, VeryHard x2)", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 100);
+    var thresholds = new LevelStarThresholds(oneStar: 100, twoStar: 200, threeStar: 300);
+    var progress = new LevelProgress(score: 250, collected: 0, remainingCount: 0); // 2-star
+
+    var easy = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.Easy);
+    var hard = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.Hard);
+    var vhard = LevelEvaluator.Evaluate(objective, thresholds, progress, Difficulty.VeryHard);
+
+    Assert(easy.Stars == 2 && easy.CreditPayout == 35, $"easy 2-star should pay 35, got {easy.CreditPayout}");
+    Assert(hard.CreditPayout == 53, $"hard 2-star should pay round(35 x 1.5)=53, got {hard.CreditPayout}");
+    Assert(vhard.CreditPayout == 70, $"very-hard 2-star should pay 35 x 2=70, got {vhard.CreditPayout}");
+});
+
+Run("Task14: Evaluate without a difficulty defaults to Easy (x1) — back-compat", () =>
+{
+    var objective = new LevelObjective(LevelObjectiveType.Score, target: 100);
+    var thresholds = new LevelStarThresholds(100, 200, 300);
+    var progress = new LevelProgress(score: 350, collected: 0, remainingCount: 0); // 3-star
+    var r = LevelEvaluator.Evaluate(objective, thresholds, progress);
+    Assert(r.Stars == 3 && r.CreditPayout == 55, $"default (Easy) 3-star should pay 55, got {r.CreditPayout}");
+});
+
+Run("Task14: CollectBags replaces ClearBoard — positive bag target, complete when none remain", () =>
+{
+    var obj = new LevelObjective(LevelObjectiveType.CollectBags, target: 3);
+    Assert(obj.Type == LevelObjectiveType.CollectBags, "type should be CollectBags");
+    Assert(!obj.IsComplete(new LevelProgress(100, 0, remainingCount: 2)), "2 bags left => not complete");
+    Assert(obj.IsComplete(new LevelProgress(100, 0, remainingCount: 0)), "0 bags left => complete");
+
+    bool threw = false;
+    try { new LevelObjective(LevelObjectiveType.CollectBags, target: 0); }
+    catch (ArgumentOutOfRangeException) { threw = true; }
+    Assert(threw, "CollectBags with target 0 should throw (needs a bag count)");
+});
+
+Run("Task14: CollectBags levels seed exactly their target bag count", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        if (level.Objective.Type != LevelObjectiveType.CollectBags) continue;
+        Assert(level.Objective.Target >= 1, $"{level.Name}: CollectBags needs a positive target");
+        Assert(level.MinInitialCreditBags == level.Objective.Target && level.MaxInitialCreditBags == level.Objective.Target,
+            $"{level.Name}: should seed exactly {level.Objective.Target} bags, got [{level.MinInitialCreditBags},{level.MaxInitialCreditBags}]");
+    }
+});
+
+Console.WriteLine("--- Task 15: Level session (moves, progress, win/loss) ---");
+
+// Small helper: a synthetic cascade outcome for one move.
+CascadeResult Move(int tiles, int score, int bags = 0) => new CascadeResult(1, 0, false, bags, tiles, score);
+var Palette = new[] { TileType.Flower, TileType.Leaf, TileType.Wave, TileType.Sun, TileType.Mushroom, TileType.Coral };
+
+Run("Task15: a level is won when the objective completes, with stars & difficulty-scaled credits", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 100), 5, Palette, difficulty: Difficulty.Hard);
+    var session = new LevelSession(level, new LevelStarThresholds(100, 200, 300));
+
+    Assert(session.Outcome == LevelOutcome.InProgress, "a fresh session is in progress");
+    Assert(session.MovesRemaining == 5, $"starts with the full move budget, got {session.MovesRemaining}");
+
+    session.ApplyMove(Move(tiles: 20, score: 250)); // 2-star score, objective (>=100) met
+    Assert(session.Outcome == LevelOutcome.Won, "objective met => won");
+
+    var result = session.GetResult();
+    Assert(result.IsComplete, "won result should be complete");
+    Assert(result.Stars == 2, $"score 250 vs 100/200/300 => 2 stars, got {result.Stars}");
+    Assert(result.CreditPayout == 53, $"Hard 2-star => round(35 x 1.5)=53, got {result.CreditPayout}");
+});
+
+Run("Task15: completing a level always earns at least 1 star even below the 2-star threshold", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Collect, 5), 5, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(1000, 2000, 3000));
+    session.ApplyMove(Move(tiles: 6, score: 60)); // collected 6 >= 5 => complete; score below all thresholds
+    Assert(session.Outcome == LevelOutcome.Won, "collect objective met => won");
+    Assert(session.GetResult().Stars == 1, $"completion floors at 1 star, got {session.GetResult().Stars}");
+});
+
+Run("Task15: a level is lost when moves run out with the objective incomplete", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 1000), 2, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(1000, 2000, 3000));
+
+    session.ApplyMove(Move(tiles: 5, score: 50));
+    Assert(session.Outcome == LevelOutcome.InProgress, "one move left, objective not met yet");
+    session.ApplyMove(Move(tiles: 5, score: 50)); // moves exhausted, score 100 < 1000
+    Assert(session.Outcome == LevelOutcome.Lost, "moves exhausted & objective incomplete => lost");
+
+    var result = session.GetResult();
+    Assert(!result.IsComplete && result.Stars == 0 && result.CreditPayout == 0, "a loss yields no stars and no credits");
+});
+
+Run("Task15: progress accumulates across moves and the move budget counts down", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Collect, 30), 4, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(50, 100, 150));
+
+    session.ApplyMove(Move(tiles: 8, score: 80, bags: 1));
+    session.ApplyMove(Move(tiles: 7, score: 70));
+    Assert(session.TilesCleared == 15, $"tiles 8+7=15, got {session.TilesCleared}");
+    Assert(session.Score == 150, $"score 80+70=150, got {session.Score}");
+    Assert(session.BagsCollected == 1, $"bags=1, got {session.BagsCollected}");
+    Assert(session.MovesRemaining == 2, $"4-2=2 moves left, got {session.MovesRemaining}");
+    Assert(session.Outcome == LevelOutcome.InProgress, "15 tiles < 30 target and moves remain");
+});
+
+Run("Task15: a CollectBags level completes once all its seeded bags are collected", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.CollectBags, 3), 10, Palette,
+        minInitialCreditBags: 3, maxInitialCreditBags: 3);
+    var session = new LevelSession(level, new LevelStarThresholds(50, 100, 150));
+
+    session.ApplyMove(Move(tiles: 10, score: 100, bags: 2));
+    Assert(session.Outcome == LevelOutcome.InProgress, "1 bag still uncollected");
+    session.ApplyMove(Move(tiles: 10, score: 100, bags: 1));
+    Assert(session.Outcome == LevelOutcome.Won, "all 3 bags collected => won");
+});
+
+Run("Task15: applying a move after the level is over is rejected", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 10), 3, Palette);
+    var session = new LevelSession(level, new LevelStarThresholds(10, 20, 30));
+    session.ApplyMove(Move(tiles: 5, score: 50)); // wins immediately
+    bool threw = false;
+    try { session.ApplyMove(Move(tiles: 5, score: 50)); }
+    catch (InvalidOperationException) { threw = true; }
+    Assert(threw, "ApplyMove should throw once the level is Won or Lost");
+});
+
+// --- Task 16a: per-level star thresholds (Requirement 7 crit. 8) ---
+// The level-select/results UI (Task 16) needs each catalog level to carry its
+// own star thresholds instead of the caller inventing them. These grade on
+// score for every objective type (design.md §7.4).
+
+Run("Task16: every catalog level carries non-null, monotonic star thresholds", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        var t = level.StarThresholds;
+        Assert(t != null, $"level {level.LevelNumber} is missing StarThresholds");
+        Assert(t.OneStar >= 1, $"level {level.LevelNumber}: 1-star threshold must be positive");
+        Assert(t.TwoStar > t.OneStar, $"level {level.LevelNumber}: 2-star must exceed 1-star (meaningful reach)");
+        Assert(t.ThreeStar > t.TwoStar, $"level {level.LevelNumber}: 3-star must exceed 2-star (meaningful reach)");
+    }
+});
+
+Run("Task16: a Score level's 1-star threshold equals its score target (bare win = 1 star)", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+        if (level.Objective.Type == LevelObjectiveType.Score)
+            Assert(level.StarThresholds.OneStar == level.Objective.Target,
+                $"level {level.LevelNumber}: Score 1-star should equal the score target {level.Objective.Target}, got {level.StarThresholds.OneStar}");
+});
+
+Run("Task16: a Collect level's 1-star threshold equals target x 10 (min score to clear the objective)", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+        if (level.Objective.Type == LevelObjectiveType.Collect)
+            Assert(level.StarThresholds.OneStar == level.Objective.Target * 10,
+                $"level {level.LevelNumber}: Collect 1-star should equal target*10 = {level.Objective.Target * 10}, got {level.StarThresholds.OneStar}");
+});
+
+Run("Task16: a LevelSession can be built from a LevelData alone, using its own thresholds", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 100), 5, Palette,
+        difficulty: Difficulty.Hard);
+    var session = new LevelSession(level);
+    // Score of 200 hits the catalog-derived 2-star reach (100 * 1.4 = 140, 100 * 1.9 = 190).
+    session.ApplyMove(Move(tiles: 20, score: 200));
+    Assert(session.Outcome == LevelOutcome.Won, "objective (score >= 100) should be met");
+    var result = session.GetResult();
+    Assert(result.Stars == 3, $"score 200 should clear the 3-star reach (190), got {result.Stars} stars");
+});
+
+// --- Task 16b: in-memory level record store (best-star records) ---
+// The level-select UI shows each level's best-star record. Persistence
+// (Core/SaveSystem) is out of scope (Task 8), so this is a run-lifetime store
+// behind an ILevelRecordStore seam a real SaveSystem can implement later.
+
+Run("Task16: a fresh record store reports zero best-stars and zero total", () =>
+{
+    ILevelRecordStore store = new LevelRecordStore();
+    Assert(store.GetBestStars(1) == 0, "an unplayed level should report 0 best stars");
+    Assert(store.GetBestStars(30) == 0, "an unplayed level should report 0 best stars");
+    Assert(store.TotalStars == 0, "a fresh store should have 0 total stars");
+});
+
+Run("Task16: recording stars stores them and reports the improvement", () =>
+{
+    var store = new LevelRecordStore();
+    Assert(store.Record(3, 2) == true, "first record for a level is an improvement");
+    Assert(store.GetBestStars(3) == 2, "best stars should be the recorded value");
+    Assert(store.TotalStars == 2, "total stars should reflect the single record");
+});
+
+Run("Task16: a record only improves the best; a worse or equal replay never lowers it", () =>
+{
+    var store = new LevelRecordStore();
+    store.Record(5, 3);
+    Assert(store.Record(5, 1) == false, "a worse replay must not count as an improvement");
+    Assert(store.GetBestStars(5) == 3, "best stars must not drop on a worse replay");
+    Assert(store.Record(5, 3) == false, "an equal replay is not an improvement");
+    Assert(store.GetBestStars(5) == 3, "best stars unchanged on an equal replay");
+});
+
+Run("Task16: TotalStars sums the best across distinct levels", () =>
+{
+    var store = new LevelRecordStore();
+    store.Record(1, 1);
+    store.Record(2, 3);
+    store.Record(2, 2);   // worse replay, ignored
+    store.Record(3, 2);
+    Assert(store.TotalStars == 1 + 3 + 2, $"expected 6 total stars, got {store.TotalStars}");
+});
+
+Run("Task16: the record store rejects out-of-range level numbers and star counts", () =>
+{
+    var store = new LevelRecordStore();
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(0, 1), "level number 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(1, 4), "4 stars is out of range");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(1, -1), "negative stars are invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.GetBestStars(0), "level number 0 is invalid");
+});
+
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");
 
 Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>
@@ -773,17 +1081,17 @@ Run("Task7: collect objective completes when collected items meet the target", (
     Assert(result.CreditPayout == 20, $"expected 20 credit payout for 1 star, got {result.CreditPayout}");
 });
 
-Run("Task7: clear-board objective completes only when remaining count is zero", () =>
+Run("Task7: collect-bags objective completes only when remaining bag count is zero", () =>
 {
-    var objective = new LevelObjective(LevelObjectiveType.ClearBoard, target: 0);
+    var objective = new LevelObjective(LevelObjectiveType.CollectBags, target: 3);
     var thresholds = new LevelStarThresholds(oneStar: 10, twoStar: 20, threeStar: 30);
     var progress = new LevelProgress(score: 75, collected: 0, remainingCount: 0);
 
     var result = LevelEvaluator.Evaluate(objective, thresholds, progress);
 
-    Assert(result.IsComplete, "clear-board objective should be complete when remaining count is zero");
+    Assert(result.IsComplete, "collect-bags objective should be complete when remaining bag count is zero");
     Assert(result.Stars == 3, $"expected 3 stars for score 75 with thresholds 10/20/30, got {result.Stars}");
-    Assert(result.CreditPayout == 55, $"expected 55 credit payout for 3 stars, got {result.CreditPayout}");
+    Assert(result.CreditPayout == 55, $"expected 55 credit payout for 3 stars (Easy default), got {result.CreditPayout}");
 });
 
 Run("Task7: incomplete objective returns zero stars and zero payout", () =>
@@ -867,20 +1175,83 @@ Run("Task8: time until next heart returns zero when due", () =>
 
 Console.WriteLine("--- Task 10: ScriptableObject level data for Island 1, Levels 1-5 ---");
 
-Run("Task10: Island 1 Levels 1-5 have valid level data entries", () =>
+Run("Task10: Island 1 Levels 1-5 (the original sample) are present and valid", () =>
 {
-    var levels = LevelData.Island1Levels;
-    Assert(levels.Count == 5, $"expected 5 Island 1 levels, got {levels.Count}");
+    // Island 1 now spans all 30 levels (GDD §8.2); this test still guards the
+    // original Task 10 sample — the first five levels of the island.
+    var island1 = LevelData.Island1Levels;
+    Assert(island1.Count >= 5, $"expected at least 5 Island 1 levels, got {island1.Count}");
 
-    for (int index = 0; index < levels.Count; index++)
+    for (int index = 0; index < 5; index++)
     {
-        var level = levels[index];
+        var level = island1[index];
         Assert(level.Island == 1, $"level {index + 1}: expected island 1, got {level.Island}");
         Assert(level.LevelNumber == index + 1, $"level {index + 1}: expected level number {index + 1}, got {level.LevelNumber}");
         Assert(level.MoveLimit > 0, $"level {index + 1}: move limit must be positive");
         Assert(level.AllowedTileTypes.Length >= 3, $"level {index + 1}: must allow at least 3 tile types");
         Assert(level.MinInitialCreditBags >= 0, $"level {index + 1}: min initial credit bags must be non-negative");
         Assert(level.MaxInitialCreditBags >= level.MinInitialCreditBags, $"level {index + 1}: max initial credit bags must be >= min");
+    }
+});
+
+Console.WriteLine("--- Task 12: Full level catalog — Island 1, Levels 1-30 (GDD §8.2) ---");
+
+Run("Task12: catalog is 30 levels, all Island 1, numbered 1-30 in order", () =>
+{
+    Assert(LevelData.LevelCount == 30, $"expected LevelCount 30, got {LevelData.LevelCount}");
+    Assert(LevelData.AllLevels.Count == 30, $"expected 30 levels total, got {LevelData.AllLevels.Count}");
+    for (int i = 0; i < LevelData.AllLevels.Count; i++)
+    {
+        var level = LevelData.AllLevels[i];
+        Assert(level.Island == 1, $"{level.Name}: GDD §8.2 puts all M1 levels in Island 1, got island {level.Island}");
+        Assert(level.LevelNumber == i + 1, $"entry {i}: expected level number {i + 1}, got {level.LevelNumber}");
+    }
+});
+
+Run("Task12: IslandLevels(1) returns all 30 and Island1Levels matches it", () =>
+{
+    var island1 = LevelData.IslandLevels(1);
+    Assert(island1.Count == 30, $"Island 1 should hold all 30 M1 levels, got {island1.Count}");
+    Assert(LevelData.Island1Levels.Count == 30, $"Island1Levels should be all 30, got {LevelData.Island1Levels.Count}");
+    // No other island has authored content in M1.
+    Assert(LevelData.IslandLevels(2).Count == 0, "Island 2 (Levels 31-70) is a later milestone — not authored in M1");
+});
+
+Run("Task12: all 30 levels satisfy the per-level validity invariants", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        Assert(level.MoveLimit > 0, $"{level.Name}: move limit must be positive");
+        Assert(level.AllowedTileTypes.Length >= 3, $"{level.Name}: must allow at least 3 tile types");
+        Assert(level.MinInitialCreditBags >= 0, $"{level.Name}: min initial credit bags must be non-negative");
+        Assert(level.MaxInitialCreditBags >= level.MinInitialCreditBags, $"{level.Name}: max credit bags must be >= min");
+    }
+});
+
+Run("Task12: each (Island, LevelNumber) pair is unique", () =>
+{
+    var seen = new HashSet<(int, int)>();
+    foreach (var level in LevelData.AllLevels)
+        Assert(seen.Add((level.Island, level.LevelNumber)), $"duplicate level identity {level.Name}");
+    Assert(seen.Count == 30, $"expected 30 unique level identities, got {seen.Count}");
+});
+
+Run("Task12: difficulty ramps across the 30 levels (Score & Collect targets non-decreasing in order)", () =>
+{
+    int prevScore = 0;
+    int prevCollect = 0;
+    foreach (var level in LevelData.AllLevels)
+    {
+        if (level.Objective.Type == LevelObjectiveType.Score)
+        {
+            Assert(level.Objective.Target >= prevScore, $"{level.Name}: Score target {level.Objective.Target} dropped below the previous Score level's {prevScore}");
+            prevScore = level.Objective.Target;
+        }
+        else if (level.Objective.Type == LevelObjectiveType.Collect)
+        {
+            Assert(level.Objective.Target >= prevCollect, $"{level.Name}: Collect target {level.Objective.Target} dropped below the previous Collect level's {prevCollect}");
+            prevCollect = level.Objective.Target;
+        }
     }
 });
 

@@ -6,10 +6,12 @@ without the person re-explaining the project.
 
 ## What this project is
 
-Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD
-(`specs/` has the derived spec docs; the original .docx GDD is not in this
-folder — ask the user to re-upload it if you need to check something against
-the primary source that isn't already captured in `requirements.md`).
+Unity match-3 puzzle game core logic (`IslandQuest`), built from a GDD. The
+primary-source GDD now lives in the repo at
+`docs/gdd/IslandQuest_GDD_v2_1.docx` (with `docs/gdd/README.md` noting what it
+does and doesn't specify); `specs/` holds the derived spec docs. Check the
+GDD directly when a spec detail is ambiguous — extract its text with
+`unzip -p docs/gdd/IslandQuest_GDD_v2_1.docx word/document.xml`.
 
 **Repo**: `https://github.com/oran1980/IslandQuest` (public).
 
@@ -36,11 +38,16 @@ actual Editor.
 
 ## Current status
 
-**All tasks (1–11) are done.** The `verify/` suite is **67 passed, 0 failed**,
+**All tasks (1–12) are done.** The `verify/` suite is **73 passed, 0 failed**,
 and Task 9's Unity presentation layer has been playtested in Unity 6.3 LTS —
 grid render, drag-swap, cascade playback, and manual booster activation all
-confirmed on screen (see `tasks.md` Task 9's playtest log). This completes the
-M1 "Working Match-3 board" milestone.
+confirmed on screen (see `tasks.md` Task 9's playtest log). Task 12 completed
+the M1 content target: the full **30-level catalog** (Island 1, Levels 1–30
+per GDD §8.2) now lives in `LevelData.AllLevels`, with a difficulty curve
+documented in design.md §6. This completes the M1 "Working Match-3 board" milestone
+(working board + 30 levels + lives + green credit-bag drops, GDD §12.1).
+
+Current branch for the next phase: `feature/levels-6-30`.
 
 Task 11 (manual booster activation via swap — `BoosterActivation.
 GetAffectedCellsAimed`, `SwapEngine.TryManualActivationSwap`/`ManualSwapResult`,

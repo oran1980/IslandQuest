@@ -357,6 +357,148 @@ the verify project, not copies — one source of truth). This is a deliberate,
 documented substitution for a conventional test framework, not a shortcut:
 every assertion still really compiles and really executes.
 
+## 6. Level catalog (Requirement 6, Task 12)
+
+The GDD (§12.1) fixes the M1 content target at "30 levels" but doesn't
+prescribe how they're grouped, difficulty numbers, or objective mix — those
+are design choices, recorded here.
+
+**Structure (GDD §8.2).** The GDD's island map assigns **Island 1 ("Coconut
+Isle") to Levels 1–30** — so the whole M1 catalog is one island, with
+`LevelNumber` running 1–30 globally. (Islands 2–3, Levels 31–70 / 71–120, are
+later milestones and aren't authored here.) `LevelData.AllLevels` is the
+single source of truth (all 30, in level order); `Island1Levels` (the whole
+catalog) and `IslandLevels(n)` are views over it. `LevelCount` = 30.
+
+**Objective rhythm.** Score → Collect → Score → Collect → ClearBoard,
+repeating every 5 levels, so each block ends on a board-clear and alternates
+the two metered objective types across the 30. (The objective *types*
+themselves — Score/Collect/ClearBoard — are an implementation-era invention,
+not GDD-specified; see the note below.)
+
+**Difficulty levers, and how they ramp.** Nothing here is GDD-derived; the
+goal is a monotone curve across Levels 1–30 that the verify suite guards
+(`Task12: difficulty ramps across the 30 levels`):
+
+- *Score targets* climb level-over-level, 500 → 4800 (500, 850, 1000, …, 4800).
+- *Collect targets* likewise, 8 → 40.
+- *Move limits* generally tighten toward Level 30 (down to 14) — less slack to
+  hit a rising target.
+- *Allowed tile types*: the earliest levels sometimes drop to 4–5 types
+  (fewer types → more incidental matches → gentler); from the mid-teens on,
+  all six are used throughout. More colors means each specific match is
+  rarer, so the same target is harder to reach.
+
+**Objective semantics are still open.** The GDD (reviewed from
+`docs/gdd/`) frames each level around a single generic "level objective"
+measured as a *percentage* (§7.3), with 1/2/3-star tiers paying 20/35/55
+credits (§6.2). It does **not** define a points-per-tile scoring formula,
+nor enumerate objective types, nor a board-clear goal — so how `Score` is
+actually scored during play, what `Collect` counts, and what `ClearBoard`
+requires are all still undecided (the board refills forever, so `ClearBoard`
+can't mean an empty board). Task 12 only fixes the *catalog data*; making
+these objectives actually playable is the follow-on work.
+
+Credit-bag counts stay at the GDD §7.1 default (1–2 per level) across the
+catalog; they're a reward knob, not a difficulty one, so they weren't used
+to shape the curve.
+
+**Not built here (deferred, not forgotten).** Per-level *star thresholds*
+(`LevelStarThresholds`) still aren't part of `LevelData` — same as Task 10.
+Star rating currently needs thresholds supplied at evaluation time; wiring a
+per-level threshold set into the catalog is a small follow-up once a
+level-select/results UI needs it. Likewise, no per-level ScriptableObject
+`.asset` files are authored — the canonical catalog is the C# `AllLevels`
+data; `LevelDataAsset` remains available for hand-authored Editor overrides.
+
+## 7. Level play — scoring, objectives, difficulty & rewards (Requirement 7)
+
+Making a level actually *playable to completion* needs a layer the M1 engine
+never had (`LevelProgress` was only ever built in tests). The GDD frames a
+level as one generic "objective" measured as a % (§7.3) paying flat star
+credits (§6.2) — but specifies no scoring formula, objective types, or
+difficulty-scaled rewards. The model below was chosen with the product owner
+(a Homescapes-style feel); it is a design decision, not GDD-derived.
+
+Sequenced as Tasks 13–16:
+
+### 7.1 Scoring (Task 13 — done)
+
+`ScoringRules.RoundScore(tiles, comboRound) = tiles × 10 × comboRound`.
+`CascadeEngine` accumulates `TilesCleared` and combo-weighted `Score` per
+round (round 1 = ×1, round 2 = ×2, …) and returns them on `CascadeResult`.
+Booster **spawn** cells are excluded (they aren't cleared); booster
+**chain-swept** cells are included. Kept as a separate pure class so the
+formula is tunable and unit-testable apart from the cascade loop.
+
+### 7.2 Objective types (Task 14 — done)
+
+Three types, one per level:
+
+- `Score` — reach a points target (from §7.1).
+- `Collect` — clear a target count of tiles (`CascadeResult.TilesCleared`).
+- `CollectBags` — collect all of the level's credit bags. The level seeds
+  exactly the target bag count at generation so it's always attainable; this
+  **replaces `ClearBoard`**, which was unwinnable on a refilling board.
+
+### 7.3 Difficulty & reward (Task 14 — done)
+
+Each level carries a `Difficulty` (Easy/Hard/VeryHard), rising in thirds
+across Levels 1–30 (Easy 1–10, Hard 11–20, VeryHard 21–30). `LevelEvaluator`
+pays reward credits = the GDD §6.2 star base (20/35/55) × a difficulty
+multiplier (Easy ×1.0, Hard ×1.5, VeryHard ×2.0), rounded away-from-zero — a
+documented extension of the GDD's flat payout so harder levels pay more (e.g.
+Hard 2★ = 53, VeryHard 3★ = 110). Multipliers are balance values, tunable.
+`ClearBoard` was replaced by `CollectBags` (target = bag count; the level
+seeds exactly that many bags so it's always winnable).
+
+### 7.4 Level session (Task 15 — done) and UI (Task 16 — planned)
+
+`LevelSession` folds each move's `CascadeResult` into a running
+`LevelProgress` (score / tiles / bags), counts moves against the limit, and
+exposes an `Outcome`: **Won** the instant the objective completes, **Lost**
+once the move budget is spent with it still incomplete. `GetResult()` grades
+via `LevelEvaluator` (stars + difficulty-scaled credits). `ApplyMove` throws
+once the level is over.
+
+**Star grading (decided here).** Stars grade on **score** for every objective
+type — `LevelObjective.PerformanceValue` now always returns `progress.Score`,
+so the objective type only sets the *win* condition while *how well* you
+played is always your points (this makes 2–3 stars meaningful on
+Collect/CollectBags levels, whose objective quantities cap out at their
+target). Completing a level **floors at 1 star** (`LevelEvaluator` takes
+`max(1, thresholds.GetStars(score))` when complete); 2–3 come from the score
+thresholds. 
+
+**Per-level thresholds (Task 16a — done).** Each catalog `LevelData` now
+derives its own `StarThresholds` in the constructor, so neither the session's
+caller nor the level-select UI has to invent them. The derivation anchors
+1 star at a "par score" (the score of a bare win) and puts 2/3 stars at ×1.4 /
+×1.9 reaches above it:
+
+| Objective   | Par score (1★) | Rationale |
+|-------------|----------------|-----------|
+| `Score`     | score target   | a bare win already meets the score target, so it is exactly 1★ |
+| `Collect`   | target × 10    | the floor score to clear `target` tiles at ×1 combo (10 pts/tile) |
+| `CollectBags` | target × 100 | a per-bag score budget — bags don't map to score directly, so this is a straight balance choice |
+
+`Math.Max` keeps the three strictly increasing even where ×1.4/×1.9 rounding
+would tie on a tiny par score. The multipliers and the CollectBags per-bag
+budget are **first-pass tunable balance values**, not GDD-derived — the actual
+2★/3★ difficulty wants a real playtest pass to tune. `LevelSession(LevelData)`
+(new one-arg ctor) grades against these; the explicit-thresholds ctor stays for
+tests that pin exact values.
+
+The Unity level-select + results screens (Task 16b — done) sit on top of this:
+`GameFlowController` (in a self-contained `LevelSelect.unity`) drives
+level-select → play → results, an in-memory `LevelRecordStore`
+(`ILevelRecordStore` — a seam for a future `Core/SaveSystem`) holds best-star
+records, and `BoardController` gained a `MoveResolved` event feeding each move's
+`CascadeResult` into the session. The menus/HUD/results are rendered
+procedurally (flat sprites + `TextMesh`); a Homescapes-grade visual pass is a
+deferred art/uGUI ticket, with the "Mia" hero left as a drop-in art seam. See
+tasks.md "How Task 16b was verified" for the playtest record.
+
 ### Design correction log
 
 - Booster eligibility (§2): corrected from a speculative shape-based theory
@@ -364,6 +506,12 @@ every assertion still really compiles and really executes.
 - Cascade refill (§3.4): corrected from a speculative matchless-refill rule
   (which would have suppressed real cascades) to plain random refill, before
   Task 4 was implemented.
+- Level catalog structure (§6): Task 12 first grouped the 30 levels as 6
+  islands × 5 (a guess, since the GDD text then in-repo didn't cover
+  grouping). When the primary-source GDD was added to `docs/gdd/`, §8.2 turned
+  out to place **Island 1 at Levels 1–30** (Islands 2–3 are Levels 31–70 /
+  71–120, later milestones). Restructured the catalog to a single Island 1
+  with `LevelNumber` 1–30, and updated the tests, before this branch merged.
 - Manual activation, spent booster (§3.6): the original §3.6 write-up
   described `GetAffectedCellsAimed` and the composition flow but didn't say
   what happens to the *fired* booster tile. During Task 11's review pass an
