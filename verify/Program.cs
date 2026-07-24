@@ -1780,6 +1780,44 @@ Run("M2-5: advancing through every scene completes the act; advancing again thro
     AssertThrows<InvalidOperationException>(() => mgr.TryAdvanceScene(), "advancing a completed act should throw");
 });
 
+// --- M2-6: day/night mode state machine (Story Layer Requirement 4 crit. 1-3) ---
+
+Console.WriteLine("--- M2-6: Day/Night mode ---");
+
+Run("M2-6: the world starts in Day mode (the puzzle world)", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    Assert(dn.Mode == WorldMode.Day, "the entry mode is Day (GDD §5.1)");
+});
+
+Run("M2-6: going to night switches mode and reports the credit balance for the §5.3 hand-off", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(85);
+    var dn = new DayNightController(credits);
+    var transition = dn.ToNight();
+    Assert(dn.Mode == WorldMode.Night, "should now be Night");
+    Assert(transition.From == WorldMode.Day && transition.To == WorldMode.Night, "transition should record Day → Night");
+    Assert(transition.CreditBalance == 85, $"the hand-off should surface the 85-credit balance (§5.3), got {transition.CreditBalance}");
+});
+
+Run("M2-6: returning to day switches back to the puzzle world", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    dn.ToNight();
+    var transition = dn.ToDay();
+    Assert(dn.Mode == WorldMode.Day, "should be back in Day");
+    Assert(transition.From == WorldMode.Night && transition.To == WorldMode.Day, "transition should record Night → Day");
+});
+
+Run("M2-6: switching to the mode you're already in is rejected", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    AssertThrows<InvalidOperationException>(() => dn.ToDay(), "already Day → ToDay should throw");
+    dn.ToNight();
+    AssertThrows<InvalidOperationException>(() => dn.ToNight(), "already Night → ToNight should throw");
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 

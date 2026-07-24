@@ -54,7 +54,7 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
     M2-1/2/4. Plain C#, verify-tested — the gated "return to puzzle or buy" fork
     (GDD §4.2) and the ungated free-advance are both key cases.
 
-- [ ] **M2-6. Day/Night mode state machine** (Requirement 4 crit. 1–3)
+- [x] **M2-6. Day/Night mode state machine** (Requirement 4 crit. 1–3)
   - `IslandQuest.Story.DayNightController` (state half): `Mode { Day, Night }`,
     starts Day, `ToNight()`/`ToDay()`, and a transition payload exposing the
     credit balance for the §5.3 hand-off. Plain C#, verify-tested; the cutscene
@@ -153,3 +153,20 @@ unaffordable gate leaves balance + scene byte-exact; an affordable gate charges
 exactly and advances; a free beat advances without spending; a bonus scene
 awards its credits; advancing through all scenes completes the act and a further
 advance throws.
+
+## How M2-6 was verified
+
+Baseline: 120 passed. RED: 4 tests referencing `DayNightController` /
+`WorldMode` / `DayNightTransition` — `CS0246: 'DayNightController' could not be
+found`. GREEN: `Assets/Scripts/Story/DayNightController.cs` — `WorldMode {Day,
+Night}` starting in Day, `ToNight()`/`ToDay()` returning a `DayNightTransition`
+(from/to + credit balance for the §5.3 hand-off). Suite **124 passed, 0
+failed**. REVIEW: entry mode is Day; ToNight/ToDay toggle correctly and the
+transition surfaces the live credit balance; switching to the current mode
+throws. The cutscene/lighting visual is deferred to M2-7 (presentation).
+
+---
+
+**M2 engine core complete (M2-1..M2-6).** All plain C#, zero UnityEngine,
+verify-green at 124 passed. Remaining: **M2-7** (Unity presentation + M1↔M2
+wiring), which needs the Editor playtest and carries the Mia/Leo art seam.
