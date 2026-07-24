@@ -1715,6 +1715,71 @@ Run("M2-4: every Act 1 scene has a Mia+Leo dialogue (Leo asks the follow-up, §3
     }
 });
 
+// --- M2-5: story sequencing + credit gate (Story Layer Requirement 5 crit. 2-3, 5) ---
+
+Console.WriteLine("--- M2-5: Story sequencing & gate ---");
+
+Run("M2-5: a new story manager starts on Act 1's first scene (the campfire)", () =>
+{
+    var mgr = new StoryManager(new CreditManager());
+    Assert(!mgr.IsComplete, "a fresh act is not complete");
+    Assert(mgr.CurrentScene!.Setting == NightSetting.Campfire, "should start on the campfire scene");
+});
+
+Run("M2-5: a gated scene the player can't afford is blocked, leaving state untouched", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);   // campfire costs 30
+    var mgr = new StoryManager(credits);
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.InsufficientCredits, "20 < 30 should block the campfire");
+    Assert(credits.Balance == 20, "a blocked action must not spend");
+    Assert(mgr.CurrentScene!.Setting == NightSetting.Campfire, "a blocked action must not advance the scene");
+});
+
+Run("M2-5: an affordable gated scene charges its cost and advances", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);
+    var mgr = new StoryManager(credits);
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "30 >= 30 should light the campfire");
+    Assert(credits.Balance == 0, "the campfire should charge exactly 30");
+    Assert(mgr.CurrentScene!.LifeHack == LifeHack.WaterFiltration, "should advance to Act 1 scene 2");
+});
+
+Run("M2-5: a free teaching beat advances with no spend", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(5);
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "A"), new DialogueLine(Speaker.Leo, "B"));
+    var free = new StoryScene(NightSetting.JungleRiver, LifeHack.WaterFiltration, seq);
+    var mgr = new StoryManager(credits, new List<StoryScene> { free });
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "a free beat always advances");
+    Assert(credits.Balance == 5, "a free beat must not spend");
+    Assert(mgr.IsComplete, "advancing the only scene completes the act");
+});
+
+Run("M2-5: resolving a scene awards its bonus credits", () =>
+{
+    var credits = new CreditManager();
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "Treasure!"));
+    var bonusScene = new StoryScene(NightSetting.SecretRuins, LifeHack.StarNavigation, seq, bonusCredits: 60);
+    var mgr = new StoryManager(credits, new List<StoryScene> { bonusScene });
+    mgr.TryAdvanceScene();
+    Assert(credits.Balance == 60, $"resolving a bonus scene should award 60, got {credits.Balance}");
+});
+
+Run("M2-5: advancing through every scene completes the act; advancing again throws", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);   // enough for the one gated (campfire) scene
+    var mgr = new StoryManager(credits);
+    int guard = 0;
+    while (!mgr.IsComplete && guard++ < 10)
+        Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "each Act 1 scene should advance");
+    Assert(mgr.IsComplete && mgr.CurrentScene == null, "the act should be complete with no current scene");
+    AssertThrows<InvalidOperationException>(() => mgr.TryAdvanceScene(), "advancing a completed act should throw");
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 

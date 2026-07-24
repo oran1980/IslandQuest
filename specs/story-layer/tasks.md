@@ -46,7 +46,7 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
   - _Dialogue lines are authored content (drafted in Mia/Leo's §3.3/§3.5 voice
     since the GDD gives the hooks, not verbatim script) — reviewable._
 
-- [ ] **M2-5. Story sequencing + credit gate** (Requirement 5 crit. 2–3, 5)
+- [x] **M2-5. Story sequencing + credit gate** (Requirement 5 crit. 2–3, 5)
   - `IslandQuest.Story.StoryManager`: Act 1 scenes + cursor, `CurrentScene`,
     `TryAdvanceScene()` — for a gated scene charges via `CreditManager.TrySpend`
     (advances + awards bonus on success; blocks + reports insufficient credits
@@ -139,3 +139,17 @@ FieldFirstAid; every scene features both Mia and Leo (Leo asks the "why" per
 §3.3); bonus defaults to 0 and negative bonus is rejected.
 **Authored dialogue** (Mia/Leo lines) is drafted content in their §3.3/§3.5
 voice, flagged for product-owner review.
+
+## How M2-5 was verified
+
+Baseline: 114 passed. RED: 6 tests referencing `StoryManager` / `SceneOutcome`
+— `CS0246: 'StoryManager' could not be found`. GREEN:
+`Assets/Scripts/Story/StoryManager.cs` — sequences an act's scenes over a
+cursor with `CurrentScene`/`IsComplete`/`SceneNumber` and `TryAdvanceScene()`
+(gated → `CreditManager.TrySpend`, awards bonus + advances on success, returns
+`InsufficientCredits` without mutating on failure; free beat advances with no
+spend). Suite **120 passed, 0 failed**. REVIEW: starts on the campfire; an
+unaffordable gate leaves balance + scene byte-exact; an affordable gate charges
+exactly and advances; a free beat advances without spending; a bonus scene
+awards its credits; advancing through all scenes completes the act and a further
+advance throws.
