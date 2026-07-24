@@ -12,6 +12,21 @@ public sealed class BoardController : MonoBehaviour
     [SerializeField] private float tileSpacing = 1.1f;
     [SerializeField] private float swapAnimationDuration = 0.12f;
     [SerializeField] private float cascadeStepDelay = 0.15f;
+    // When a coordinator (Task 16's GameFlowController) drives the board it
+    // calls Initialize itself with the chosen level, so auto-init on Start is
+    // turned off in that scene. scene1 (Task 9's standalone demo) leaves it on.
+    [SerializeField] private bool initializeOnStart = true;
+
+    /// <summary>Raised once per <b>committed</b> move (a swap that matched or a
+    /// manual booster activation) with that move's fully-resolved
+    /// <see cref="CascadeResult"/>. Not raised for a reverted no-match swap,
+    /// which doesn't count as a move. Task 16's session layer folds these into a
+    /// <see cref="LevelSession"/>.</summary>
+    public event Action<CascadeResult>? MoveResolved;
+
+    /// <summary>When false, the board ignores pointer input — used by the
+    /// coordinator to freeze the board once a level is won or lost.</summary>
+    public bool InputEnabled { get; set; } = true;
 
     private Board? _board;
     private BoardConfig? _config;
@@ -23,6 +38,9 @@ public sealed class BoardController : MonoBehaviour
 
     private void Start()
     {
+        if (!initializeOnStart)
+            return;
+
         if (_board is null)
         {
             if (levelDataAsset != null)
@@ -79,7 +97,7 @@ public sealed class BoardController : MonoBehaviour
 
     public void OnTilePointerDown(BoardTileView tileView)
     {
-        if (_board is null || _isBusy)
+        if (_board is null || _isBusy || !InputEnabled)
             return;
 
         _selectedCell = (tileView.Row, tileView.Col);
@@ -88,7 +106,7 @@ public sealed class BoardController : MonoBehaviour
 
     public void OnTilePointerEnter(BoardTileView tileView)
     {
-        if (!_dragging || _selectedCell is null || _board is null || _isBusy)
+        if (!_dragging || _selectedCell is null || _board is null || _isBusy || !InputEnabled)
             return;
 
         var target = (tileView.Row, tileView.Col);
@@ -139,11 +157,12 @@ public sealed class BoardController : MonoBehaviour
             RefreshAllTiles();
             yield return new WaitForSeconds(cascadeStepDelay);
 
-            CascadeEngine.ResolveCascadeFrom(_board, manual.ClearedCells, _config, _rng);
+            var manualResult = CascadeEngine.ResolveCascadeFrom(_board, manual.ClearedCells, _config, _rng);
             RefreshAllTiles();
             yield return new WaitForSeconds(cascadeStepDelay);
 
             _isBusy = false;
+            MoveResolved?.Invoke(manualResult);
             yield break;
         }
 
@@ -159,11 +178,12 @@ public sealed class BoardController : MonoBehaviour
         RefreshAllTiles();
         yield return new WaitForSeconds(cascadeStepDelay);
 
-        CascadeEngine.ResolveCascade(_board, _config, _rng);
+        var cascadeResult = CascadeEngine.ResolveCascade(_board, _config, _rng);
         RefreshAllTiles();
         yield return new WaitForSeconds(cascadeStepDelay);
 
         _isBusy = false;
+        MoveResolved?.Invoke(cascadeResult);
     }
 
     private IEnumerator AnimateSwap(BoardTileView sourceView, BoardTileView targetView, Vector3 sourcePosition, Vector3 targetPosition)

@@ -489,7 +489,15 @@ budget are **first-pass tunable balance values**, not GDD-derived — the actual
 (new one-arg ctor) grades against these; the explicit-thresholds ctor stays for
 tests that pin exact values.
 
-The Unity level-select + results screens (Task 16b) sit on top of this.
+The Unity level-select + results screens (Task 16b — done) sit on top of this:
+`GameFlowController` (in a self-contained `LevelSelect.unity`) drives
+level-select → play → results, an in-memory `LevelRecordStore`
+(`ILevelRecordStore` — a seam for a future `Core/SaveSystem`) holds best-star
+records, and `BoardController` gained a `MoveResolved` event feeding each move's
+`CascadeResult` into the session. The menus/HUD/results are rendered
+procedurally (flat sprites + `TextMesh`); a Homescapes-grade visual pass is a
+deferred art/uGUI ticket, with the "Mia" hero left as a drop-in art seam. See
+tasks.md "How Task 16b was verified" for the playtest record.
 
 ### Design correction log
 

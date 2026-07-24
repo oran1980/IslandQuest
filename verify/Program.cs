@@ -33,6 +33,19 @@ void Assert(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
+void AssertThrows<TException>(Action action, string message) where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new Exception($"expected {typeof(TException).Name} but none was thrown: {message}");
+}
+
 Console.WriteLine("IslandQuest.Match3 — Task 1 verification");
 Console.WriteLine("=========================================");
 
@@ -772,6 +785,56 @@ Run("Task16: a LevelSession can be built from a LevelData alone, using its own t
     Assert(session.Outcome == LevelOutcome.Won, "objective (score >= 100) should be met");
     var result = session.GetResult();
     Assert(result.Stars == 3, $"score 200 should clear the 3-star reach (190), got {result.Stars} stars");
+});
+
+// --- Task 16b: in-memory level record store (best-star records) ---
+// The level-select UI shows each level's best-star record. Persistence
+// (Core/SaveSystem) is out of scope (Task 8), so this is a run-lifetime store
+// behind an ILevelRecordStore seam a real SaveSystem can implement later.
+
+Run("Task16: a fresh record store reports zero best-stars and zero total", () =>
+{
+    ILevelRecordStore store = new LevelRecordStore();
+    Assert(store.GetBestStars(1) == 0, "an unplayed level should report 0 best stars");
+    Assert(store.GetBestStars(30) == 0, "an unplayed level should report 0 best stars");
+    Assert(store.TotalStars == 0, "a fresh store should have 0 total stars");
+});
+
+Run("Task16: recording stars stores them and reports the improvement", () =>
+{
+    var store = new LevelRecordStore();
+    Assert(store.Record(3, 2) == true, "first record for a level is an improvement");
+    Assert(store.GetBestStars(3) == 2, "best stars should be the recorded value");
+    Assert(store.TotalStars == 2, "total stars should reflect the single record");
+});
+
+Run("Task16: a record only improves the best; a worse or equal replay never lowers it", () =>
+{
+    var store = new LevelRecordStore();
+    store.Record(5, 3);
+    Assert(store.Record(5, 1) == false, "a worse replay must not count as an improvement");
+    Assert(store.GetBestStars(5) == 3, "best stars must not drop on a worse replay");
+    Assert(store.Record(5, 3) == false, "an equal replay is not an improvement");
+    Assert(store.GetBestStars(5) == 3, "best stars unchanged on an equal replay");
+});
+
+Run("Task16: TotalStars sums the best across distinct levels", () =>
+{
+    var store = new LevelRecordStore();
+    store.Record(1, 1);
+    store.Record(2, 3);
+    store.Record(2, 2);   // worse replay, ignored
+    store.Record(3, 2);
+    Assert(store.TotalStars == 1 + 3 + 2, $"expected 6 total stars, got {store.TotalStars}");
+});
+
+Run("Task16: the record store rejects out-of-range level numbers and star counts", () =>
+{
+    var store = new LevelRecordStore();
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(0, 1), "level number 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(1, 4), "4 stars is out of range");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.Record(1, -1), "negative stars are invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => store.GetBestStars(0), "level number 0 is invalid");
 });
 
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");

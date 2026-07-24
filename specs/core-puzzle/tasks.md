@@ -255,7 +255,7 @@ end state, so this is auditable rather than asserted.
     playable to completion.
   - _Verification: see "How Task 15 was verified" below._
 
-- [ ] **16. Unity level-select + results UI**
+- [x] **16. Unity level-select + results UI**
   - Level-select screen (levels with difficulty labels / star records) →
     load the chosen `LevelData` into `BoardController` + a `LevelSession`;
     a results panel (stars, credits earned) with replay/next. MonoBehaviours
@@ -265,8 +265,13 @@ end state, so this is auditable rather than asserted.
     `StarThresholds`, and `LevelSession(LevelData)` grades against them. Built
     RED→GREEN→REVIEW — see "How Task 16a was verified" below. Still verify-only;
     no `UnityEngine`.
-  - **16b — Unity level-select + results (MonoBehaviours + scene, pending).**
-    The presentation layer + Editor playtest, like Task 9.
+  - **16b — Unity level-select + results (MonoBehaviours + scene, done).**
+    New scene `Assets/LevelSelect.unity`, `GameFlowController` +
+    `ClickableView`, an in-memory `LevelRecordStore`, and an in-play HUD +
+    dedicated results screen. Editor-playtested through the full loop — see
+    "How Task 16b was verified" below. Visual polish to a Homescapes-grade look
+    is deferred to a separate art/UX ticket (needs art assets + a uGUI/TMP
+    pass); the procedural screens are functional and clear but flat-shaded.
 
 ---
 
@@ -784,12 +789,67 @@ still pending, so Task 16's box stays unchecked.
    design.md §7.4 — the real 2★/3★ difficulty wants a playtest pass, which
    naturally folds into 16b's Editor playtest.
 
-### Task 16b (pending) — Unity level-select + results UI
+## How Task 16b was verified (Unity presentation layer + live Editor playtest)
 
-Not started. The presentation layer: a `LevelSelect` scene listing the 30
-levels (number, difficulty label, and — once a save layer exists — best-star
-record), launching the chosen `LevelData` into `BoardController` + a
-`LevelSession(level)`; and a results panel (stars earned, credit payout) with
-replay / next-level. MonoBehaviours + scene wiring, closed out by an Editor
-playtest in Unity 6.3 LTS exactly like Task 9 (which needs the project open in
-the Editor). Follows the same log format once run.
+Like Task 9, this layer references `UnityEngine`, so `verify/` structurally
+can't compile it — the gate is a live Editor playtest in Unity 6.3 LTS. The
+plain-C# slice it stands on (`LevelRecordStore`) *is* in `verify` (5 tests,
+part of the 95-pass suite).
+
+**Design choices (confirmed with the product owner during the playtest):**
+- **Scene approach:** one self-contained scene `Assets/LevelSelect.unity`
+  (single-scene active-toggle, no `SceneManager`/Build-Settings moving parts),
+  reusing Task 9's known-good camera + `Physics2DRaycaster` + EventSystem +
+  `Tile.prefab` wiring verbatim, plus a `Board` root and a `GameFlow` object.
+- **Records:** an in-memory `LevelRecordStore` behind `ILevelRecordStore` — a
+  clean seam for a future `Core/SaveSystem` (out of scope per Task 8); records
+  reset on app restart, which the owner accepted for M1.
+- **Rendering:** the menus/HUD/results are built *procedurally* in code
+  (white-square `SpriteRenderer` + built-in-font `TextMesh`, clicked via
+  `ClickableView` through the same raycaster the tiles use), so the scene YAML
+  stays tiny and low-risk — no fragile per-widget asset wiring.
+
+**New/changed code:**
+- `Assets/Scripts/Match3/LevelRecordStore.cs` (+ `ILevelRecordStore`) — the
+  only verify-tested piece.
+- `Assets/Scripts/GameFlowController.cs` — coordinator: level-select grid →
+  play (drives `BoardController.Initialize` + a `LevelSession`) → in-play HUD →
+  dedicated results screen → replay / next / menu. Reframes the camera between
+  a menu view and a play view (opens a HUD strip above the board).
+- `Assets/Scripts/ClickableView.cs` — reusable world-space click target.
+- `Assets/Scripts/BoardController.cs` — added a `MoveResolved` event (fires the
+  per-committed-move `CascadeResult`), an `InputEnabled` gate, and an
+  `initializeOnStart` opt-out so the coordinator drives it; `scene1` untouched.
+
+**Playtest — DONE (Unity 6.3 LTS, screenshots at each step):**
+1. **Compiles clean** in the Editor (the one thing `verify` can't check).
+2. **Level-select:** the 30-level grid renders — `L#` / difficulty
+   (Easy/Hard/V.Hard, colour-coded green/gold/red) / `n/3` star record — with a
+   title showing total stars. (First pass had oversized, overlapping labels;
+   fixed by shrinking scale + tightening `TextMesh.lineSpacing` and confirmed on
+   screen.)
+3. **Start a level:** clicking a button (procedural collider raycast confirmed
+   working) hides the grid and loads a playable board.
+4. **In-play HUD:** after the owner flagged there was no on-screen objective /
+   score / moves, added a top HUD strip (objective goal, progress toward it,
+   moves remaining, running score) that updates every move — verified live:
+   L1 read `Points 90/500 · Moves 19/20 · Score 90` after one 9-tile clear
+   (scoring rule live), then `540/500` on the winning move.
+5. **Win path:** crossing the score target showed the results screen; L1 win at
+   score 540 graded **1 star** (≥ the 500 par, below the 700 two-star reach)
+   and paid **+20 credits** (Easy ×1) — both matching Tasks 13–15's engine.
+6. **Results screen:** revised per owner feedback into a dedicated, opaque,
+   colour-themed screen (board/HUD hidden) with gold `★` stars, a parchment
+   text card, a placeholder "Mia" hero (win/loss expression + bob animation, a
+   drop-in seam for real art), and Replay / Next / Menu buttons — all confirmed
+   on screen.
+7. **Buttons + record persistence:** Replay reloads the level, Next advances,
+   Menu returns to the grid where the beaten level's star record and the title's
+   total-stars are updated from the `LevelRecordStore`.
+
+**Scope note (agreed):** matching Homescapes-grade visual polish is an
+art-asset + uGUI/TMP workstream, not a code change to flat procedural shapes;
+deferred to a separate ticket. The `LevelRecordStore` (persistence) and the
+Mia hero (art) are both left as clean drop-in seams.
+
+This completes Task 16 and the M1 level-play phase (Requirement 7, Tasks 13–16).
