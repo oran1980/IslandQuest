@@ -34,7 +34,7 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
     `DialogueSequence` with a cursor (`Current`, `HasNext`, `Advance`,
     `SkipToEnd`). Plain C#, verify-tested. See log below.
 
-- [ ] **M2-4. Story scene model + all five Act 1 scenes** (Requirement 5 crit. 1, 4)
+- [x] **M2-4. Story scene model + all five Act 1 scenes** (Requirement 5 crit. 1, 4)
   - `StoryScene` (setting, **optional** gated `StoryAction`, `DialogueSequence`,
     `LifeHack` ref, optional bonus) + a `NightSetting` enum (§5.2) + a `LifeHack`
     enum (§3.4 Act 1: BowDrillFire, WaterFiltration, LeanToShelter,
@@ -123,3 +123,19 @@ text) and a cursored `DialogueSequence` (`Current`, `HasNext`, `Advance`,
 `SkipToEnd`); suite **110 passed, 0 failed**. REVIEW: starts on line 0, advances
 one at a time, `HasNext` false at the last line, `Advance` past the end throws,
 `SkipToEnd` lands on the last line, empty/null/blank inputs rejected.
+
+## How M2-4 was verified
+
+Baseline: 110 passed. RED: 4 tests referencing `StoryScene`, `NightSetting`,
+`LifeHack` — `CS0246: 'StoryScene' could not be found`. GREEN:
+`Assets/Scripts/Story/StoryScene.cs` — the scene model (setting, life hack,
+dialogue, optional `StoryAction`, optional bonus) + `NightSetting` (§5.2) +
+`LifeHack` (§3.4 Act 1) + the authored 5-scene `StoryScene.Act1` catalog; also
+added `DialogueSequence.Lines` (a non-cursor-disturbing read view). Suite
+**114 passed, 0 failed**. REVIEW: Act 1 has exactly 5 scenes in order; the
+campfire is first + gated (LightCampfire, 30, BowDrillFire); the other four are
+free teaching beats covering WaterFiltration/LeanToShelter/StarNavigation/
+FieldFirstAid; every scene features both Mia and Leo (Leo asks the "why" per
+§3.3); bonus defaults to 0 and negative bonus is rejected.
+**Authored dialogue** (Mia/Leo lines) is drafted content in their §3.3/§3.5
+voice, flagged for product-owner review.

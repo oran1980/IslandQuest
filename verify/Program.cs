@@ -1655,6 +1655,66 @@ Run("M2-3: an empty dialogue sequence is rejected", () =>
     AssertThrows<ArgumentException>(() => new DialogueSequence(), "a sequence needs at least one line");
 });
 
+// --- M2-4: story scene model + all five Act 1 scenes (Story Layer Requirement 5 crit. 1, 4) ---
+
+Console.WriteLine("--- M2-4: Story scenes & Act 1 ---");
+
+Run("M2-4: a scene bundles setting, life hack, dialogue, optional action & bonus", () =>
+{
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "..."));
+    var gated = new StoryScene(NightSetting.Campfire, LifeHack.BowDrillFire, seq,
+        StoryAction.For(StoryActionType.LightCampfire));
+    Assert(gated.IsGated, "a scene with an action is gated");
+    Assert(gated.Action!.Cost == 30, "the campfire gate should cost 30");
+    Assert(gated.Setting == NightSetting.Campfire && gated.LifeHack == LifeHack.BowDrillFire, "scene carries setting + hack");
+
+    var free = new StoryScene(NightSetting.JungleRiver, LifeHack.WaterFiltration, seq);
+    Assert(!free.IsGated && free.Action == null, "a scene with no action is a free teaching beat");
+    Assert(free.BonusCredits == 0, "bonus defaults to zero");
+});
+
+Run("M2-4: Act 1 has exactly five scenes, campfire first and gated at 30", () =>
+{
+    var act1 = StoryScene.Act1;
+    Assert(act1.Count == 5, $"Act 1 should have 5 scenes, got {act1.Count}");
+    var campfire = act1[0];
+    Assert(campfire.Setting == NightSetting.Campfire, "the first Act 1 scene is the campfire");
+    Assert(campfire.LifeHack == LifeHack.BowDrillFire, "the campfire teaches bow-drill fire");
+    Assert(campfire.IsGated && campfire.Action!.Type == StoryActionType.LightCampfire && campfire.Action.Cost == 30,
+        "the campfire is gated by Light-a-campfire (30)");
+});
+
+Run("M2-4: the other four Act 1 scenes are free teaching beats covering §3.4's hacks", () =>
+{
+    var act1 = StoryScene.Act1;
+    var expectedHacks = new HashSet<LifeHack>
+    {
+        LifeHack.WaterFiltration, LifeHack.LeanToShelter, LifeHack.StarNavigation, LifeHack.FieldFirstAid
+    };
+    for (int i = 1; i < act1.Count; i++)
+    {
+        Assert(!act1[i].IsGated, $"Act 1 scene {i} should be a free teaching beat (no credit gate)");
+        Assert(expectedHacks.Remove(act1[i].LifeHack), $"unexpected/duplicate hack at scene {i}: {act1[i].LifeHack}");
+    }
+    Assert(expectedHacks.Count == 0, "all four non-campfire §3.4 hacks should be covered");
+});
+
+Run("M2-4: every Act 1 scene has a Mia+Leo dialogue (Leo asks the follow-up, §3.3)", () =>
+{
+    foreach (var scene in StoryScene.Act1)
+    {
+        Assert(scene.Dialogue.LineCount >= 2, "each scene should have at least two dialogue lines (§3.5)");
+        bool hasMia = false, hasLeo = false;
+        // Read the lines view without disturbing the sequence's playback cursor.
+        foreach (var line in scene.Dialogue.Lines)
+        {
+            hasMia |= line.Speaker == Speaker.Mia;
+            hasLeo |= line.Speaker == Speaker.Leo;
+        }
+        Assert(hasMia && hasLeo, $"scene {scene.Setting} should feature both Mia and Leo");
+    }
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 

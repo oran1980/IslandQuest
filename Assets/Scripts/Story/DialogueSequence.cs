@@ -60,6 +60,10 @@ namespace IslandQuest.Story
         /// <summary>Total number of lines.</summary>
         public int LineCount => _lines.Count;
 
+        /// <summary>Read-only view of all lines, for inspection/rendering without
+        /// touching the playback cursor.</summary>
+        public IReadOnlyList<DialogueLine> Lines => _lines;
+
         /// <summary>Move to the next line. Throws if already at the last line
         /// (guard with <see cref="HasNext"/>).</summary>
         public void Advance()
