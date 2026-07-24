@@ -1605,6 +1605,56 @@ Run("M2-2: every story action carries its §4.3 emotional-moment context", () =>
         "the campfire action's context should reference the bow-drill technique");
 });
 
+// --- M2-3: Mia & Leo dialogue (Story Layer Requirement 3) ---
+
+Console.WriteLine("--- M2-3: Dialogue ---");
+
+Run("M2-3: a dialogue line carries a speaker and non-empty text", () =>
+{
+    var line = new DialogueLine(Speaker.Mia, "Watch this Leo — dry wood is everything.");
+    Assert(line.Speaker == Speaker.Mia, "line should carry its speaker");
+    Assert(line.Text.Contains("dry wood"), "line should carry its text");
+    AssertThrows<ArgumentException>(() => new DialogueLine(Speaker.Leo, "  "), "blank text is invalid");
+});
+
+Run("M2-3: a sequence starts on its first line and advances one line at a time", () =>
+{
+    var seq = new DialogueSequence(
+        new DialogueLine(Speaker.Mia, "First."),
+        new DialogueLine(Speaker.Leo, "Second."),
+        new DialogueLine(Speaker.Mia, "Third."));
+    Assert(seq.Current.Text == "First.", "should start on the first line");
+    Assert(seq.HasNext, "more lines should remain");
+    seq.Advance();
+    Assert(seq.Current.Text == "Second." && seq.Current.Speaker == Speaker.Leo, "advance should move to the next line");
+    seq.Advance();
+    Assert(seq.Current.Text == "Third.", "advance should reach the last line");
+    Assert(!seq.HasNext, "no lines should remain at the end");
+});
+
+Run("M2-3: advancing past the last line is rejected", () =>
+{
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "Only line."));
+    Assert(!seq.HasNext, "a single-line sequence has no next");
+    AssertThrows<InvalidOperationException>(() => seq.Advance(), "advancing past the end should throw");
+});
+
+Run("M2-3: SkipToEnd jumps straight to the last line", () =>
+{
+    var seq = new DialogueSequence(
+        new DialogueLine(Speaker.Mia, "A"),
+        new DialogueLine(Speaker.Leo, "B"),
+        new DialogueLine(Speaker.Mia, "C"));
+    seq.SkipToEnd();
+    Assert(seq.Current.Text == "C", "SkipToEnd should land on the last line");
+    Assert(!seq.HasNext, "no lines remain after SkipToEnd");
+});
+
+Run("M2-3: an empty dialogue sequence is rejected", () =>
+{
+    AssertThrows<ArgumentException>(() => new DialogueSequence(), "a sequence needs at least one line");
+});
+
 Console.WriteLine("=========================================");
 Console.WriteLine($"{passed} passed, {failed} failed");
 

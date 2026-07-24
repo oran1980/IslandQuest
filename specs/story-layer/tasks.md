@@ -29,10 +29,10 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
     60), each carrying its emotional-moment + life-hack context. A verify test
     pins the costs to the table. Data; verify-tested. See log below.
 
-- [ ] **M2-3. Mia & Leo dialogue** (Requirement 3)
+- [x] **M2-3. Mia & Leo dialogue** (Requirement 3)
   - `DialogueLine { Speaker, Text }`, `Speaker { Mia, Leo }`,
     `DialogueSequence` with a cursor (`Current`, `HasNext`, `Advance`,
-    `SkipToEnd`). Plain C#, verify-tested.
+    `SkipToEnd`). Plain C#, verify-tested. See log below.
 
 - [ ] **M2-4. Story scene model + all five Act 1 scenes** (Requirement 5 crit. 1, 4)
   - `StoryScene` (setting, **optional** gated `StoryAction`, `DialogueSequence`,
@@ -113,3 +113,13 @@ GREEN: `Assets/Scripts/Story/StoryAction.cs` — the six §4.3 actions via
 suite **105 passed, 0 failed**. REVIEW: costs pinned to the §4.3 table by test,
 all six carry non-empty context, the campfire names the bow-drill lesson, an
 unknown type throws. No regressions.
+
+## How M2-3 was verified
+
+Baseline: 105 passed. RED: 5 tests referencing `DialogueLine`, `Speaker`,
+`DialogueSequence` — `CS0246: 'DialogueLine' could not be found`. GREEN:
+`Assets/Scripts/Story/DialogueSequence.cs` — `DialogueLine` (speaker + non-empty
+text) and a cursored `DialogueSequence` (`Current`, `HasNext`, `Advance`,
+`SkipToEnd`); suite **110 passed, 0 failed**. REVIEW: starts on line 0, advances
+one at a time, `HasNext` false at the last line, `Advance` past the end throws,
+`SkipToEnd` lands on the last line, empty/null/blank inputs rejected.
