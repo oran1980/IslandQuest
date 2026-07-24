@@ -729,6 +729,51 @@ Run("Task15: applying a move after the level is over is rejected", () =>
     Assert(threw, "ApplyMove should throw once the level is Won or Lost");
 });
 
+// --- Task 16a: per-level star thresholds (Requirement 7 crit. 8) ---
+// The level-select/results UI (Task 16) needs each catalog level to carry its
+// own star thresholds instead of the caller inventing them. These grade on
+// score for every objective type (design.md §7.4).
+
+Run("Task16: every catalog level carries non-null, monotonic star thresholds", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+    {
+        var t = level.StarThresholds;
+        Assert(t != null, $"level {level.LevelNumber} is missing StarThresholds");
+        Assert(t.OneStar >= 1, $"level {level.LevelNumber}: 1-star threshold must be positive");
+        Assert(t.TwoStar > t.OneStar, $"level {level.LevelNumber}: 2-star must exceed 1-star (meaningful reach)");
+        Assert(t.ThreeStar > t.TwoStar, $"level {level.LevelNumber}: 3-star must exceed 2-star (meaningful reach)");
+    }
+});
+
+Run("Task16: a Score level's 1-star threshold equals its score target (bare win = 1 star)", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+        if (level.Objective.Type == LevelObjectiveType.Score)
+            Assert(level.StarThresholds.OneStar == level.Objective.Target,
+                $"level {level.LevelNumber}: Score 1-star should equal the score target {level.Objective.Target}, got {level.StarThresholds.OneStar}");
+});
+
+Run("Task16: a Collect level's 1-star threshold equals target x 10 (min score to clear the objective)", () =>
+{
+    foreach (var level in LevelData.AllLevels)
+        if (level.Objective.Type == LevelObjectiveType.Collect)
+            Assert(level.StarThresholds.OneStar == level.Objective.Target * 10,
+                $"level {level.LevelNumber}: Collect 1-star should equal target*10 = {level.Objective.Target * 10}, got {level.StarThresholds.OneStar}");
+});
+
+Run("Task16: a LevelSession can be built from a LevelData alone, using its own thresholds", () =>
+{
+    var level = new LevelData(1, 1, new LevelObjective(LevelObjectiveType.Score, 100), 5, Palette,
+        difficulty: Difficulty.Hard);
+    var session = new LevelSession(level);
+    // Score of 200 hits the catalog-derived 2-star reach (100 * 1.4 = 140, 100 * 1.9 = 190).
+    session.ApplyMove(Move(tiles: 20, score: 200));
+    Assert(session.Outcome == LevelOutcome.Won, "objective (score >= 100) should be met");
+    var result = session.GetResult();
+    Assert(result.Stars == 3, $"score 200 should clear the 3-star reach (190), got {result.Stars} stars");
+});
+
 Console.WriteLine("--- Task 5: Booster spawn & activation ---");
 
 Run("Task5: 4+ match spawns a booster tile on the topmost-leftmost cell, clears the rest", () =>

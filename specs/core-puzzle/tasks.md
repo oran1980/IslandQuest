@@ -260,6 +260,13 @@ end state, so this is auditable rather than asserted.
     load the chosen `LevelData` into `BoardController` + a `LevelSession`;
     a results panel (stars, credits earned) with replay/next. MonoBehaviours
     + scene(s); Editor playtest (like Task 9).
+  - **16a — per-level star thresholds (engine, done).** The one engine-side
+    prerequisite the UI needs: each `LevelData` now derives its own
+    `StarThresholds`, and `LevelSession(LevelData)` grades against them. Built
+    RED→GREEN→REVIEW — see "How Task 16a was verified" below. Still verify-only;
+    no `UnityEngine`.
+  - **16b — Unity level-select + results (MonoBehaviours + scene, pending).**
+    The presentation layer + Editor playtest, like Task 9.
 
 ---
 
@@ -743,3 +750,46 @@ Baseline before starting: 80 passed, 0 failed.
    only caller-supplied input the session still needs is the per-level
    `LevelStarThresholds`; per-level threshold authoring/derivation is deferred
    to Task 16 (noted in design.md §7.4).
+
+## How Task 16a was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 86 passed, 0 failed. This is the engine-side
+prerequisite for Task 16's UI (the "per-level threshold authoring" Task 15
+deferred); the Unity level-select/results layer (16b) + Editor playtest is
+still pending, so Task 16's box stays unchecked.
+
+1. RED step: added 4 tests referencing `LevelData.StarThresholds` and a new
+   one-arg `LevelSession(LevelData)` ctor — neither existed. Confirmed compile
+   failure first: `CS1061: 'LevelData' does not contain a definition for
+   'StarThresholds'` and `CS7036: no argument given for the required parameter
+   'thresholds' of 'LevelSession(LevelData, LevelStarThresholds)'`.
+2. GREEN step:
+   - `LevelData`: added a `StarThresholds` property set in the constructor from
+     a new private `DeriveStarThresholds(objective)`. Par score anchors 1 star
+     — Score → target, Collect → target×10, CollectBags → target×100 — and 2/3
+     stars are ×1.4 / ×1.9 reaches, with `Math.Max` guaranteeing strict
+     monotonicity even on tiny par scores. The `Lvl` catalog helper and every
+     existing `new LevelData(...)` call get thresholds for free (no signature
+     change, no 90 hand-authored numbers).
+   - `LevelSession`: added a one-arg `LevelSession(LevelData)` ctor that
+     delegates to the existing two-arg ctor with `level.StarThresholds`. The
+     explicit-thresholds ctor is untouched, so all Task 15 tests stay green.
+   - Full suite: **90 passed, 0 failed** (Tasks 7/14/15 unaffected).
+3. REVIEW: thresholds are derived after all constructor validation runs (the
+   objective is already non-null), so no ordering hazard; catalog min par
+   scores (Score 500, Collect 8×10, CollectBags 3×100) all keep the three
+   thresholds strictly increasing without needing the `Math.Max` guard, but the
+   guard makes arbitrary future levels safe too. Documented the anchors and the
+   ×1.4/×1.9 multipliers as first-pass **tunable** balance values in
+   design.md §7.4 — the real 2★/3★ difficulty wants a playtest pass, which
+   naturally folds into 16b's Editor playtest.
+
+### Task 16b (pending) — Unity level-select + results UI
+
+Not started. The presentation layer: a `LevelSelect` scene listing the 30
+levels (number, difficulty label, and — once a save layer exists — best-star
+record), launching the chosen `LevelData` into `BoardController` + a
+`LevelSession(level)`; and a results panel (stars earned, credit payout) with
+replay / next-level. MonoBehaviours + scene wiring, closed out by an Editor
+playtest in Unity 6.3 LTS exactly like Task 9 (which needs the project open in
+the Editor). Follows the same log format once run.

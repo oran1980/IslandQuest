@@ -468,11 +468,28 @@ played is always your points (this makes 2–3 stars meaningful on
 Collect/CollectBags levels, whose objective quantities cap out at their
 target). Completing a level **floors at 1 star** (`LevelEvaluator` takes
 `max(1, thresholds.GetStars(score))` when complete); 2–3 come from the score
-thresholds. Per-level star thresholds are still supplied to the session by the
-caller — deriving/authoring them per level is a small balancing follow-up for
-Task 16.
+thresholds. 
 
-The Unity level-select + results screens (Task 16) sit on top of this.
+**Per-level thresholds (Task 16a — done).** Each catalog `LevelData` now
+derives its own `StarThresholds` in the constructor, so neither the session's
+caller nor the level-select UI has to invent them. The derivation anchors
+1 star at a "par score" (the score of a bare win) and puts 2/3 stars at ×1.4 /
+×1.9 reaches above it:
+
+| Objective   | Par score (1★) | Rationale |
+|-------------|----------------|-----------|
+| `Score`     | score target   | a bare win already meets the score target, so it is exactly 1★ |
+| `Collect`   | target × 10    | the floor score to clear `target` tiles at ×1 combo (10 pts/tile) |
+| `CollectBags` | target × 100 | a per-bag score budget — bags don't map to score directly, so this is a straight balance choice |
+
+`Math.Max` keeps the three strictly increasing even where ×1.4/×1.9 rounding
+would tie on a tiny par score. The multipliers and the CollectBags per-bag
+budget are **first-pass tunable balance values**, not GDD-derived — the actual
+2★/3★ difficulty wants a real playtest pass to tune. `LevelSession(LevelData)`
+(new one-arg ctor) grades against these; the explicit-thresholds ctor stays for
+tests that pin exact values.
+
+The Unity level-select + results screens (Task 16b) sit on top of this.
 
 ### Design correction log
 

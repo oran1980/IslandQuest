@@ -15,6 +15,15 @@ namespace IslandQuest.Match3
         public int MaxInitialCreditBags { get; }
         public Difficulty Difficulty { get; }
 
+        /// <summary>Score thresholds for this level's 1/2/3-star grade
+        /// (Requirement 7 crit. 8). Derived from the objective so every catalog
+        /// level carries its own without hand-authoring 90 numbers — the
+        /// level-select/results UI (Task 16) and <see cref="LevelSession"/> read
+        /// these instead of the caller inventing thresholds. Stars grade on
+        /// score for every objective type (design.md §7.4); see
+        /// <see cref="DeriveStarThresholds"/> for the (tunable) formula.</summary>
+        public LevelStarThresholds StarThresholds { get; }
+
         public string Name => $"Island {Island} Level {LevelNumber}";
 
         public LevelData(
@@ -53,6 +62,33 @@ namespace IslandQuest.Match3
             MinInitialCreditBags = minInitialCreditBags;
             MaxInitialCreditBags = maxInitialCreditBags;
             Difficulty = difficulty;
+            StarThresholds = DeriveStarThresholds(objective);
+        }
+
+        /// <summary>Derives 1/2/3-star score thresholds from the objective. A
+        /// "par score" anchors 1 star (the score of a bare win): a Score level's
+        /// par is its score target; a Collect level's is target × 10 (the floor
+        /// score to clear that many tiles at ×1 combo); a CollectBags level's is
+        /// target × 100 (a per-bag score budget, since bags don't map to score
+        /// directly). 2/3 stars are ×1.4 / ×1.9 reaches above par. These
+        /// multipliers/anchors are first-pass tunable balance values, not
+        /// GDD-derived — see design.md §7.4.</summary>
+        private static LevelStarThresholds DeriveStarThresholds(LevelObjective objective)
+        {
+            int parScore = objective.Type switch
+            {
+                LevelObjectiveType.Score => objective.Target,
+                LevelObjectiveType.Collect => objective.Target * 10,
+                LevelObjectiveType.CollectBags => objective.Target * 100,
+                _ => objective.Target,
+            };
+
+            int one = parScore;
+            // Math.Max keeps thresholds strictly increasing even for tiny par
+            // scores where the ×1.4/×1.9 rounding would otherwise tie.
+            int two = Math.Max(one + 1, (int)Math.Round(parScore * 1.4, MidpointRounding.AwayFromZero));
+            int three = Math.Max(two + 1, (int)Math.Round(parScore * 1.9, MidpointRounding.AwayFromZero));
+            return new LevelStarThresholds(one, two, three);
         }
 
         public BoardConfig ToBoardConfig(int? seed = null)

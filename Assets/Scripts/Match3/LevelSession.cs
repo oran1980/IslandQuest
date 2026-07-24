@@ -35,6 +35,14 @@ namespace IslandQuest.Match3
             _thresholds = thresholds ?? throw new ArgumentNullException(nameof(thresholds));
         }
 
+        /// <summary>Build a session straight from a catalog level, grading
+        /// against the level's own <see cref="LevelData.StarThresholds"/>. This
+        /// is the path the level-select UI (Task 16) uses.</summary>
+        public LevelSession(LevelData level)
+            : this(level, (level ?? throw new ArgumentNullException(nameof(level))).StarThresholds)
+        {
+        }
+
         public int MovesUsed => _movesUsed;
         public int MovesRemaining => _level.MoveLimit - _movesUsed;
         public int Score => _score;
