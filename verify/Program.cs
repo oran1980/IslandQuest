@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using IslandQuest.Match3;
+using IslandQuest.Economy;
 
 // Dependency-free verification harness for Task 1 (design.md §5 explains why:
 // NuGet restore is blocked in this sandbox, so this stands in for xUnit/NUnit).
@@ -1493,6 +1494,78 @@ Run("Task11: original GetAffectedCells path is unchanged (regression guard)", ()
     foreach (var cell in flare)
         Assert(board2[cell.Row, cell.Col].Type == TileType.Sun, $"original SolarFlare should read its own color; {cell} is not Sun");
     Assert(flare.Contains((1, 1)) && flare.Contains((3, 3)), "original SolarFlare should include all Sun cells");
+});
+
+// --- M2-1: green credit balance & economy (Story Layer Requirement 1) ---
+// The currency bridging the puzzle (earn) and story (spend) loops. Plain C#,
+// zero UnityEngine; persistence behind an ICreditStore seam like M1's records.
+
+Console.WriteLine("--- M2-1: Credit economy ---");
+
+Run("M2-1: a fresh credit manager starts at zero", () =>
+{
+    var credits = new CreditManager();
+    Assert(credits.Balance == 0, $"expected 0 starting balance, got {credits.Balance}");
+});
+
+Run("M2-1: earning credits adds to the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);
+    credits.Earn(35);
+    Assert(credits.Balance == 55, $"expected 55 after earning 20+35, got {credits.Balance}");
+});
+
+Run("M2-1: an affordable spend succeeds and deducts exactly the cost", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(50);
+    Assert(credits.TrySpend(30) == true, "spending 30 of 50 should succeed");
+    Assert(credits.Balance == 20, $"expected 20 remaining, got {credits.Balance}");
+});
+
+Run("M2-1: an unaffordable spend is refused and leaves the balance untouched (never negative)", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);
+    Assert(credits.TrySpend(30) == false, "spending 30 of 20 should be refused");
+    Assert(credits.Balance == 20, $"balance must be unchanged after a refused spend, got {credits.Balance}");
+});
+
+Run("M2-1: CanAfford reports affordability without mutating the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);
+    Assert(credits.CanAfford(30) == true, "30 of 30 should be affordable");
+    Assert(credits.CanAfford(31) == false, "31 of 30 should not be affordable");
+    Assert(credits.Balance == 30, "CanAfford must not change the balance");
+});
+
+Run("M2-1: bonus credits (treasure/story) are added to the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(10);
+    credits.AwardBonus(60);
+    Assert(credits.Balance == 70, $"expected 70 after 10 + 60 bonus, got {credits.Balance}");
+});
+
+Run("M2-1: rejects non-positive earn/spend/bonus amounts", () =>
+{
+    var credits = new CreditManager();
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.Earn(0), "earn 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.Earn(-5), "earn negative is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.TrySpend(0), "spend 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.AwardBonus(-1), "negative bonus is invalid");
+});
+
+Run("M2-1: balance is read through the injected store (SaveSystem seam)", () =>
+{
+    ICreditStore store = new CreditStore();
+    store.Balance = 40;
+    var credits = new CreditManager(store);
+    Assert(credits.Balance == 40, "manager should reflect the store's balance");
+    credits.Earn(10);
+    Assert(store.Balance == 50, "earning should write through to the store");
 });
 
 Console.WriteLine("=========================================");

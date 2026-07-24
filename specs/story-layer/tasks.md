@@ -16,12 +16,12 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
 
 ---
 
-- [ ] **M2-1. Green credit balance & economy** (Requirement 1)
+- [x] **M2-1. Green credit balance & economy** (Requirement 1)
   - `IslandQuest.Economy.CreditManager`: `Balance`, `Earn(int)`,
     `TrySpend(int) → bool` (never negative), `CanAfford(int)`, `AwardBonus(int)`,
     over an `ICreditStore` seam (in-memory `CreditStore` now; future
     `Core/SaveSystem` later — mirrors M1's `ILevelRecordStore`). Plain C#,
-    verify-tested.
+    verify-tested. See "How M2-1 was verified" below.
 
 - [ ] **M2-2. Story actions & the §4.3 cost table** (Requirement 2)
   - `StoryAction` (enum + cost/context lookup) transcribed verbatim from GDD
@@ -78,3 +78,23 @@ first (all verify-green), then scope M2-7's scene/wiring with a playtest pass.
 
 _(Appended per task as they're completed, following the M1 log format —
 actual RED failure, GREEN fix, REVIEW findings.)_
+
+## How M2-1 was verified (strict TDD: RED confirmed before any production code)
+
+Baseline before starting: 95 passed, 0 failed. First M2 code, so the
+`verify/` csproj was extended to also compile `../Assets/Scripts/Economy/*.cs`
+and `../Assets/Scripts/Story/*.cs` (empty globs until files exist).
+
+1. RED step: added 8 tests + `using IslandQuest.Economy;` referencing
+   `CreditManager`, `ICreditStore`, `CreditStore` — none existed. Confirmed the
+   compile failure first: `CS0234: The type or namespace name 'Economy' does not
+   exist in the namespace 'IslandQuest'`.
+2. GREEN step: added `Assets/Scripts/Economy/CreditManager.cs` — `CreditManager`
+   over an `ICreditStore` (in-memory `CreditStore`): `Balance`, `Earn`,
+   `AwardBonus`, `CanAfford`, `TrySpend` (deducts exactly, refuses + leaves
+   untouched when unaffordable so it never goes negative), all amounts
+   positive-guarded. Full suite: **103 passed, 0 failed**.
+3. REVIEW: confirmed every mutation goes through the injected store (store-seam
+   test writes through), the refused-spend path leaves the balance byte-exact,
+   and `CanAfford` is non-mutating. No M1 regressions. Persistence seam mirrors
+   M1's `ILevelRecordStore` so a future `Core/SaveSystem` drops in unchanged.

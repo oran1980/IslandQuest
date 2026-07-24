@@ -16,6 +16,11 @@
     <!-- Link (not copy) the real Unity-bound source files: one source of
          truth, no chance of "tests pass against a stale copy". -->
     <Compile Include="../Assets/Scripts/Match3/*.cs" />
+    <!-- M2 story-layer engine (plain C#, zero UnityEngine — see
+         specs/story-layer/design.md §0). Globs are empty until the files
+         exist; that's fine. -->
+    <Compile Include="../Assets/Scripts/Economy/*.cs" />
+    <Compile Include="../Assets/Scripts/Story/*.cs" />
   </ItemGroup>
 
 </Project>
