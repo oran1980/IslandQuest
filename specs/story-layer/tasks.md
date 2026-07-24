@@ -23,11 +23,11 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
     `Core/SaveSystem` later — mirrors M1's `ILevelRecordStore`). Plain C#,
     verify-tested. See "How M2-1 was verified" below.
 
-- [ ] **M2-2. Story actions & the §4.3 cost table** (Requirement 2)
+- [x] **M2-2. Story actions & the §4.3 cost table** (Requirement 2)
   - `StoryAction` (enum + cost/context lookup) transcribed verbatim from GDD
     §4.3 (campfire 30 / bridge 50 / cave 80 / passage 120 / animal 40 / chest
     60), each carrying its emotional-moment + life-hack context. A verify test
-    pins the costs to the table. Data; verify-tested.
+    pins the costs to the table. Data; verify-tested. See log below.
 
 - [ ] **M2-3. Mia & Leo dialogue** (Requirement 3)
   - `DialogueLine { Speaker, Text }`, `Speaker { Mia, Leo }`,
@@ -103,3 +103,13 @@ and `../Assets/Scripts/Story/*.cs` (empty globs until files exist).
    test writes through), the refused-spend path leaves the balance byte-exact,
    and `CanAfford` is non-mutating. No M1 regressions. Persistence seam mirrors
    M1's `ILevelRecordStore` so a future `Core/SaveSystem` drops in unchanged.
+
+## How M2-2 was verified
+
+Baseline: 103 passed. RED: 2 tests referencing `StoryAction` / `StoryActionType`
+(+ `using IslandQuest.Story;`) — `CS0234: namespace 'Story' does not exist`.
+GREEN: `Assets/Scripts/Story/StoryAction.cs` — the six §4.3 actions via
+`StoryAction.For(type)`, each with its verbatim cost + emotional-moment context;
+suite **105 passed, 0 failed**. REVIEW: costs pinned to the §4.3 table by test,
+all six carry non-empty context, the campfire names the bow-drill lesson, an
+unknown type throws. No regressions.

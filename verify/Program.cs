@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IslandQuest.Match3;
 using IslandQuest.Economy;
+using IslandQuest.Story;
 
 // Dependency-free verification harness for Task 1 (design.md §5 explains why:
 // NuGet restore is blocked in this sandbox, so this stands in for xUnit/NUnit).
@@ -1566,6 +1567,42 @@ Run("M2-1: balance is read through the injected store (SaveSystem seam)", () =>
     Assert(credits.Balance == 40, "manager should reflect the store's balance");
     credits.Earn(10);
     Assert(store.Balance == 50, "earning should write through to the store");
+});
+
+// --- M2-2: story actions & the GDD §4.3 cost table (Story Layer Requirement 2) ---
+
+Console.WriteLine("--- M2-2: Story actions & costs ---");
+
+Run("M2-2: every story action's cost matches the GDD §4.3 table verbatim", () =>
+{
+    (StoryActionType type, int cost)[] expected =
+    {
+        (StoryActionType.LightCampfire, 30),
+        (StoryActionType.CrossRopeBridge, 50),
+        (StoryActionType.EnterHiddenCave, 80),
+        (StoryActionType.UnlockSecretPassage, 120),
+        (StoryActionType.RescueTrappedAnimal, 40),
+        (StoryActionType.OpenTreasureChest, 60),
+    };
+    foreach (var (type, cost) in expected)
+    {
+        var action = StoryAction.For(type);
+        Assert(action.Cost == cost, $"{type} should cost {cost} (§4.3), got {action.Cost}");
+        Assert(action.Type == type, $"StoryAction.For({type}) should carry that type");
+    }
+});
+
+Run("M2-2: every story action carries its §4.3 emotional-moment context", () =>
+{
+    foreach (StoryActionType type in Enum.GetValues(typeof(StoryActionType)))
+    {
+        var action = StoryAction.For(type);
+        Assert(!string.IsNullOrWhiteSpace(action.EmotionalMoment),
+            $"{type} should carry a non-empty emotional-moment context (§4.3 col 3)");
+    }
+    // Spot-check the campfire's context names the bow-drill lesson (§4.3).
+    Assert(StoryAction.For(StoryActionType.LightCampfire).EmotionalMoment.Contains("bow-drill"),
+        "the campfire action's context should reference the bow-drill technique");
 });
 
 Console.WriteLine("=========================================");
