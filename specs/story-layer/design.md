@@ -52,18 +52,30 @@ not special logic.
 
 ## 3. Story scenes & sequencing (Requirement 5)
 
-`StoryScene` bundles: `Setting` (a GDD §5.2 night-location enum), the gated
-`StoryAction` (+ its cost), a `DialogueSequence`, the `LifeHack` it teaches (an
-id/enum referencing §3.4 — the full tip-card content is M3, so M2 stores only
-the reference + the Layer-1 lines), and an optional bonus-credit award.
+`StoryScene` bundles: `Setting` (a GDD §5.2 night-location enum), an **optional**
+gated `StoryAction` (+ its cost — null for a free teaching beat), a
+`DialogueSequence`, the `LifeHack` it teaches (an id/enum referencing §3.4 — the
+full tip-card content is M3, so M2 stores only the reference + the Layer-1
+lines), and an optional bonus-credit award.
+
+**Act 1 gating (decided with the product owner).** Only the **campfire** scene
+is credit-gated (Light a campfire, 30 — the one Act 1 action GDD §4.3 prices);
+the other four §3.4 scenes (water filtration, lean-to shelter, star navigation,
+Leo's-cut first aid) are **free teaching beats** — dialogue + life hack, no
+spend. This is faithful to the GDD (§4.3 lists no other Act 1 cost) and keeps
+the credit-spend tension anchored on the campfire; §4.3's remaining actions
+(bridge/cave/passage/rescue/chest) attach to later scenes as they appear. The
+optional `StoryAction` on `StoryScene` is what makes an ungated scene expressible.
 
 `StoryManager` (§11.2 "scene sequencing, credit gate checks, dialogue flow"):
-holds Act 1's ordered scenes + a cursor, exposes `CurrentScene`, and
-`TryPerformAction()` which asks `CreditManager.TrySpend(scene.Action.Cost)` —
-on success charges + advances (+ awards any bonus), on failure reports
-insufficient credits without mutating anything (GDD §4.2's "return to puzzle or
-buy" fork). `StoryManager` depends on `CreditManager` + the scene data only;
-it's plain C# and fully verify-testable.
+holds Act 1's ordered scenes + a cursor, exposes `CurrentScene`, and advances
+through them. For a **gated** scene, `TryAdvanceScene()` asks
+`CreditManager.TrySpend(scene.Action.Cost)` — on success charges + advances (+
+awards any bonus), on failure reports insufficient credits without mutating
+anything (GDD §4.2's "return to puzzle or buy" fork). For a **free teaching
+beat** (no action), advancing always succeeds with no spend. `StoryManager`
+depends on `CreditManager` + the scene data only; it's plain C# and fully
+verify-testable.
 
 **Campfire scene (the M2 showcase, Requirement 5 crit. 4):** Setting = Campfire,
 Action = LightCampfire (30), LifeHack = BowDrillFire, DialogueSequence = the

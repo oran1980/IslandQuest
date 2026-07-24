@@ -34,20 +34,25 @@ on, so it comes first; the Unity presentation + M1↔M2 wiring comes last.
     `DialogueSequence` with a cursor (`Current`, `HasNext`, `Advance`,
     `SkipToEnd`). Plain C#, verify-tested.
 
-- [ ] **M2-4. Story scene model + Act 1 authoring incl. campfire**
-    (Requirement 5 crit. 1, 4)
-  - `StoryScene` (setting, gated `StoryAction`, `DialogueSequence`, `LifeHack`
-    ref, optional bonus) + a `NightSetting` enum (§5.2) + a `LifeHack` enum
-    (§3.4 Act 1). Author the **campfire scene** (and the rest of Act 1's
-    triggers as data). Data; verify-tested (campfire has action=LightCampfire,
-    cost 30, bow-drill hack, Mia+Leo lines).
+- [ ] **M2-4. Story scene model + all five Act 1 scenes** (Requirement 5 crit. 1, 4)
+  - `StoryScene` (setting, **optional** gated `StoryAction`, `DialogueSequence`,
+    `LifeHack` ref, optional bonus) + a `NightSetting` enum (§5.2) + a `LifeHack`
+    enum (§3.4 Act 1: BowDrillFire, WaterFiltration, LeanToShelter,
+    StarNavigation, FieldFirstAid). Author **all five** Act 1 scenes, each with
+    Mia+Leo dialogue teaching its hack: campfire (**gated** — LightCampfire, 30,
+    bow-drill), then water filtration, lean-to shelter, star navigation, and
+    Leo's-cut first aid as **free teaching beats** (no gated action). Data +
+    authored dialogue; verify-tested (campfire gating + all five present/ordered).
+  - _Dialogue lines are authored content (drafted in Mia/Leo's §3.3/§3.5 voice
+    since the GDD gives the hooks, not verbatim script) — reviewable._
 
 - [ ] **M2-5. Story sequencing + credit gate** (Requirement 5 crit. 2–3, 5)
   - `IslandQuest.Story.StoryManager`: Act 1 scenes + cursor, `CurrentScene`,
-    `TryPerformAction()` (charges via `CreditManager.TrySpend`, advances +
-    awards bonus on success; blocks + reports insufficient credits on failure).
-    Depends on M2-1/2/4. Plain C#, verify-tested — the "return to puzzle or buy"
-    fork (GDD §4.2) is the key case.
+    `TryAdvanceScene()` — for a gated scene charges via `CreditManager.TrySpend`
+    (advances + awards bonus on success; blocks + reports insufficient credits
+    on failure); for a free teaching beat advances with no spend. Depends on
+    M2-1/2/4. Plain C#, verify-tested — the gated "return to puzzle or buy" fork
+    (GDD §4.2) and the ungated free-advance are both key cases.
 
 - [ ] **M2-6. Day/Night mode state machine** (Requirement 4 crit. 1–3)
   - `IslandQuest.Story.DayNightController` (state half): `Mode { Day, Night }`,

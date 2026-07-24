@@ -117,18 +117,27 @@ campfire trigger "Campfire needed, no matches" → bow-drill fire-starting
 (§3.4).
 
 **Acceptance criteria**
-1. A story scene SHALL bundle: a setting (GDD §5.2 location), a credit-gated
-   action + cost (Requirement 2), a dialogue sequence (Requirement 3), and the
-   survival life-hack it teaches (GDD §3.4).
+1. A story scene SHALL bundle: a setting (GDD §5.2 location), an **optional**
+   credit-gated action + cost (Requirement 2), a dialogue sequence (Requirement
+   3), and the survival life-hack it teaches (GDD §3.4). A scene with no gated
+   action is a **free teaching beat** (dialogue + life hack, no spend).
 2. THE SYSTEM SHALL sequence Act 1's scenes in narrative order and expose the
    current scene.
-3. IF the player can afford the current scene's action THE SYSTEM SHALL allow
-   performing it — charging the cost (Requirement 1) and advancing the scene;
-   OTHERWISE it SHALL block the action and report insufficient credits (the
-   primary "return to puzzle or buy" moment, GDD §4.2).
-4. THE **campfire scene** SHALL be authored: setting = Campfire (§5.2), action =
-   Light a campfire (cost 30), a Mia+Leo dialogue delivering the bow-drill
-   fire-starting story moment (§3.4, §3.5 Layer 1).
+3. WHEN the current scene has a gated action: IF the player can afford it THE
+   SYSTEM SHALL allow performing it — charging the cost (Requirement 1) and
+   advancing; OTHERWISE it SHALL block the action and report insufficient
+   credits (the primary "return to puzzle or buy" moment, GDD §4.2). WHEN the
+   current scene is a free teaching beat, advancing SHALL require no spend.
+4. Act 1's **five §3.4 scenes SHALL all be authored**, each teaching its life
+   hack via Mia+Leo dialogue (§3.5 Layer 1):
+   - **Campfire** — setting Campfire (§5.2), **gated**: Light a campfire (cost
+     30, §4.3), bow-drill fire-starting. (The mandatory showcase.)
+   - **Dirty stream** — 3-layer water filtration + boiling. Free teaching beat.
+   - **Sudden rainstorm** — lean-to shelter (45° branches, 30cm coverage). Free.
+   - **Lost after dark** — North Star / analog-watch navigation. Free.
+   - **Leo's cut** — plantain-leaf antiseptic + pine-needle tea. Free.
+   Only the campfire is credit-gated in Act 1 (GDD §4.3 prices no other Act 1
+   action); §4.3's remaining actions attach to later scenes as they appear.
 5. WHEN a scene with a treasure/bonus resolves THE SYSTEM SHALL award its bonus
    credits (Requirement 1 crit. 5 / GDD §4.2).
 
