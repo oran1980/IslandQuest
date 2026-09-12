@@ -1699,6 +1699,20 @@ Run("M2-4: the other four Act 1 scenes are free teaching beats covering §3.4's 
     Assert(expectedHacks.Count == 0, "all four non-campfire §3.4 hacks should be covered");
 });
 
+Run("M2-4: a credit-gated scene delivers more dialogue than a free teaching beat", () =>
+{
+    // Design rule (product owner): the player spent credits on a gated scene, so
+    // it must be a meatier moment than a free beat — not the same 3 lines.
+    int gatedMin = int.MaxValue, freeMax = 0;
+    foreach (var scene in StoryScene.Act1)
+    {
+        if (scene.IsGated) gatedMin = Math.Min(gatedMin, scene.Dialogue.LineCount);
+        else freeMax = Math.Max(freeMax, scene.Dialogue.LineCount);
+    }
+    Assert(gatedMin > freeMax,
+        $"every gated scene should out-length every free beat; shortest gated = {gatedMin}, longest free = {freeMax}");
+});
+
 Run("M2-4: every Act 1 scene has a Mia+Leo dialogue (Leo asks the follow-up, §3.3)", () =>
 {
     foreach (var scene in StoryScene.Act1)
