@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using IslandQuest.Match3;
+using IslandQuest.Economy;
+using IslandQuest.Story;
 
 // Dependency-free verification harness for Task 1 (design.md §5 explains why:
 // NuGet restore is blocked in this sandbox, so this stands in for xUnit/NUnit).
@@ -1493,6 +1495,327 @@ Run("Task11: original GetAffectedCells path is unchanged (regression guard)", ()
     foreach (var cell in flare)
         Assert(board2[cell.Row, cell.Col].Type == TileType.Sun, $"original SolarFlare should read its own color; {cell} is not Sun");
     Assert(flare.Contains((1, 1)) && flare.Contains((3, 3)), "original SolarFlare should include all Sun cells");
+});
+
+// --- M2-1: green credit balance & economy (Story Layer Requirement 1) ---
+// The currency bridging the puzzle (earn) and story (spend) loops. Plain C#,
+// zero UnityEngine; persistence behind an ICreditStore seam like M1's records.
+
+Console.WriteLine("--- M2-1: Credit economy ---");
+
+Run("M2-1: a fresh credit manager starts at zero", () =>
+{
+    var credits = new CreditManager();
+    Assert(credits.Balance == 0, $"expected 0 starting balance, got {credits.Balance}");
+});
+
+Run("M2-1: earning credits adds to the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);
+    credits.Earn(35);
+    Assert(credits.Balance == 55, $"expected 55 after earning 20+35, got {credits.Balance}");
+});
+
+Run("M2-1: an affordable spend succeeds and deducts exactly the cost", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(50);
+    Assert(credits.TrySpend(30) == true, "spending 30 of 50 should succeed");
+    Assert(credits.Balance == 20, $"expected 20 remaining, got {credits.Balance}");
+});
+
+Run("M2-1: an unaffordable spend is refused and leaves the balance untouched (never negative)", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);
+    Assert(credits.TrySpend(30) == false, "spending 30 of 20 should be refused");
+    Assert(credits.Balance == 20, $"balance must be unchanged after a refused spend, got {credits.Balance}");
+});
+
+Run("M2-1: CanAfford reports affordability without mutating the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);
+    Assert(credits.CanAfford(30) == true, "30 of 30 should be affordable");
+    Assert(credits.CanAfford(31) == false, "31 of 30 should not be affordable");
+    Assert(credits.Balance == 30, "CanAfford must not change the balance");
+});
+
+Run("M2-1: bonus credits (treasure/story) are added to the balance", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(10);
+    credits.AwardBonus(60);
+    Assert(credits.Balance == 70, $"expected 70 after 10 + 60 bonus, got {credits.Balance}");
+});
+
+Run("M2-1: rejects non-positive earn/spend/bonus amounts", () =>
+{
+    var credits = new CreditManager();
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.Earn(0), "earn 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.Earn(-5), "earn negative is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.TrySpend(0), "spend 0 is invalid");
+    AssertThrows<ArgumentOutOfRangeException>(() => credits.AwardBonus(-1), "negative bonus is invalid");
+});
+
+Run("M2-1: balance is read through the injected store (SaveSystem seam)", () =>
+{
+    ICreditStore store = new CreditStore();
+    store.Balance = 40;
+    var credits = new CreditManager(store);
+    Assert(credits.Balance == 40, "manager should reflect the store's balance");
+    credits.Earn(10);
+    Assert(store.Balance == 50, "earning should write through to the store");
+});
+
+// --- M2-2: story actions & the GDD §4.3 cost table (Story Layer Requirement 2) ---
+
+Console.WriteLine("--- M2-2: Story actions & costs ---");
+
+Run("M2-2: every story action's cost matches the GDD §4.3 table verbatim", () =>
+{
+    (StoryActionType type, int cost)[] expected =
+    {
+        (StoryActionType.LightCampfire, 30),
+        (StoryActionType.CrossRopeBridge, 50),
+        (StoryActionType.EnterHiddenCave, 80),
+        (StoryActionType.UnlockSecretPassage, 120),
+        (StoryActionType.RescueTrappedAnimal, 40),
+        (StoryActionType.OpenTreasureChest, 60),
+    };
+    foreach (var (type, cost) in expected)
+    {
+        var action = StoryAction.For(type);
+        Assert(action.Cost == cost, $"{type} should cost {cost} (§4.3), got {action.Cost}");
+        Assert(action.Type == type, $"StoryAction.For({type}) should carry that type");
+    }
+});
+
+Run("M2-2: every story action carries its §4.3 emotional-moment context", () =>
+{
+    foreach (StoryActionType type in Enum.GetValues(typeof(StoryActionType)))
+    {
+        var action = StoryAction.For(type);
+        Assert(!string.IsNullOrWhiteSpace(action.EmotionalMoment),
+            $"{type} should carry a non-empty emotional-moment context (§4.3 col 3)");
+    }
+    // Spot-check the campfire's context names the bow-drill lesson (§4.3).
+    Assert(StoryAction.For(StoryActionType.LightCampfire).EmotionalMoment.Contains("bow-drill"),
+        "the campfire action's context should reference the bow-drill technique");
+});
+
+// --- M2-3: Mia & Leo dialogue (Story Layer Requirement 3) ---
+
+Console.WriteLine("--- M2-3: Dialogue ---");
+
+Run("M2-3: a dialogue line carries a speaker and non-empty text", () =>
+{
+    var line = new DialogueLine(Speaker.Mia, "Watch this Leo — dry wood is everything.");
+    Assert(line.Speaker == Speaker.Mia, "line should carry its speaker");
+    Assert(line.Text.Contains("dry wood"), "line should carry its text");
+    AssertThrows<ArgumentException>(() => new DialogueLine(Speaker.Leo, "  "), "blank text is invalid");
+});
+
+Run("M2-3: a sequence starts on its first line and advances one line at a time", () =>
+{
+    var seq = new DialogueSequence(
+        new DialogueLine(Speaker.Mia, "First."),
+        new DialogueLine(Speaker.Leo, "Second."),
+        new DialogueLine(Speaker.Mia, "Third."));
+    Assert(seq.Current.Text == "First.", "should start on the first line");
+    Assert(seq.HasNext, "more lines should remain");
+    seq.Advance();
+    Assert(seq.Current.Text == "Second." && seq.Current.Speaker == Speaker.Leo, "advance should move to the next line");
+    seq.Advance();
+    Assert(seq.Current.Text == "Third.", "advance should reach the last line");
+    Assert(!seq.HasNext, "no lines should remain at the end");
+});
+
+Run("M2-3: advancing past the last line is rejected", () =>
+{
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "Only line."));
+    Assert(!seq.HasNext, "a single-line sequence has no next");
+    AssertThrows<InvalidOperationException>(() => seq.Advance(), "advancing past the end should throw");
+});
+
+Run("M2-3: SkipToEnd jumps straight to the last line", () =>
+{
+    var seq = new DialogueSequence(
+        new DialogueLine(Speaker.Mia, "A"),
+        new DialogueLine(Speaker.Leo, "B"),
+        new DialogueLine(Speaker.Mia, "C"));
+    seq.SkipToEnd();
+    Assert(seq.Current.Text == "C", "SkipToEnd should land on the last line");
+    Assert(!seq.HasNext, "no lines remain after SkipToEnd");
+});
+
+Run("M2-3: an empty dialogue sequence is rejected", () =>
+{
+    AssertThrows<ArgumentException>(() => new DialogueSequence(), "a sequence needs at least one line");
+});
+
+// --- M2-4: story scene model + all five Act 1 scenes (Story Layer Requirement 5 crit. 1, 4) ---
+
+Console.WriteLine("--- M2-4: Story scenes & Act 1 ---");
+
+Run("M2-4: a scene bundles setting, life hack, dialogue, optional action & bonus", () =>
+{
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "..."));
+    var gated = new StoryScene(NightSetting.Campfire, LifeHack.BowDrillFire, seq,
+        StoryAction.For(StoryActionType.LightCampfire));
+    Assert(gated.IsGated, "a scene with an action is gated");
+    Assert(gated.Action!.Cost == 30, "the campfire gate should cost 30");
+    Assert(gated.Setting == NightSetting.Campfire && gated.LifeHack == LifeHack.BowDrillFire, "scene carries setting + hack");
+
+    var free = new StoryScene(NightSetting.JungleRiver, LifeHack.WaterFiltration, seq);
+    Assert(!free.IsGated && free.Action == null, "a scene with no action is a free teaching beat");
+    Assert(free.BonusCredits == 0, "bonus defaults to zero");
+});
+
+Run("M2-4: Act 1 has exactly five scenes, campfire first and gated at 30", () =>
+{
+    var act1 = StoryScene.Act1;
+    Assert(act1.Count == 5, $"Act 1 should have 5 scenes, got {act1.Count}");
+    var campfire = act1[0];
+    Assert(campfire.Setting == NightSetting.Campfire, "the first Act 1 scene is the campfire");
+    Assert(campfire.LifeHack == LifeHack.BowDrillFire, "the campfire teaches bow-drill fire");
+    Assert(campfire.IsGated && campfire.Action!.Type == StoryActionType.LightCampfire && campfire.Action.Cost == 30,
+        "the campfire is gated by Light-a-campfire (30)");
+});
+
+Run("M2-4: the other four Act 1 scenes are free teaching beats covering §3.4's hacks", () =>
+{
+    var act1 = StoryScene.Act1;
+    var expectedHacks = new HashSet<LifeHack>
+    {
+        LifeHack.WaterFiltration, LifeHack.LeanToShelter, LifeHack.StarNavigation, LifeHack.FieldFirstAid
+    };
+    for (int i = 1; i < act1.Count; i++)
+    {
+        Assert(!act1[i].IsGated, $"Act 1 scene {i} should be a free teaching beat (no credit gate)");
+        Assert(expectedHacks.Remove(act1[i].LifeHack), $"unexpected/duplicate hack at scene {i}: {act1[i].LifeHack}");
+    }
+    Assert(expectedHacks.Count == 0, "all four non-campfire §3.4 hacks should be covered");
+});
+
+Run("M2-4: every Act 1 scene has a Mia+Leo dialogue (Leo asks the follow-up, §3.3)", () =>
+{
+    foreach (var scene in StoryScene.Act1)
+    {
+        Assert(scene.Dialogue.LineCount >= 2, "each scene should have at least two dialogue lines (§3.5)");
+        bool hasMia = false, hasLeo = false;
+        // Read the lines view without disturbing the sequence's playback cursor.
+        foreach (var line in scene.Dialogue.Lines)
+        {
+            hasMia |= line.Speaker == Speaker.Mia;
+            hasLeo |= line.Speaker == Speaker.Leo;
+        }
+        Assert(hasMia && hasLeo, $"scene {scene.Setting} should feature both Mia and Leo");
+    }
+});
+
+// --- M2-5: story sequencing + credit gate (Story Layer Requirement 5 crit. 2-3, 5) ---
+
+Console.WriteLine("--- M2-5: Story sequencing & gate ---");
+
+Run("M2-5: a new story manager starts on Act 1's first scene (the campfire)", () =>
+{
+    var mgr = new StoryManager(new CreditManager());
+    Assert(!mgr.IsComplete, "a fresh act is not complete");
+    Assert(mgr.CurrentScene!.Setting == NightSetting.Campfire, "should start on the campfire scene");
+});
+
+Run("M2-5: a gated scene the player can't afford is blocked, leaving state untouched", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(20);   // campfire costs 30
+    var mgr = new StoryManager(credits);
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.InsufficientCredits, "20 < 30 should block the campfire");
+    Assert(credits.Balance == 20, "a blocked action must not spend");
+    Assert(mgr.CurrentScene!.Setting == NightSetting.Campfire, "a blocked action must not advance the scene");
+});
+
+Run("M2-5: an affordable gated scene charges its cost and advances", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);
+    var mgr = new StoryManager(credits);
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "30 >= 30 should light the campfire");
+    Assert(credits.Balance == 0, "the campfire should charge exactly 30");
+    Assert(mgr.CurrentScene!.LifeHack == LifeHack.WaterFiltration, "should advance to Act 1 scene 2");
+});
+
+Run("M2-5: a free teaching beat advances with no spend", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(5);
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "A"), new DialogueLine(Speaker.Leo, "B"));
+    var free = new StoryScene(NightSetting.JungleRiver, LifeHack.WaterFiltration, seq);
+    var mgr = new StoryManager(credits, new List<StoryScene> { free });
+    Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "a free beat always advances");
+    Assert(credits.Balance == 5, "a free beat must not spend");
+    Assert(mgr.IsComplete, "advancing the only scene completes the act");
+});
+
+Run("M2-5: resolving a scene awards its bonus credits", () =>
+{
+    var credits = new CreditManager();
+    var seq = new DialogueSequence(new DialogueLine(Speaker.Mia, "Treasure!"));
+    var bonusScene = new StoryScene(NightSetting.SecretRuins, LifeHack.StarNavigation, seq, bonusCredits: 60);
+    var mgr = new StoryManager(credits, new List<StoryScene> { bonusScene });
+    mgr.TryAdvanceScene();
+    Assert(credits.Balance == 60, $"resolving a bonus scene should award 60, got {credits.Balance}");
+});
+
+Run("M2-5: advancing through every scene completes the act; advancing again throws", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(30);   // enough for the one gated (campfire) scene
+    var mgr = new StoryManager(credits);
+    int guard = 0;
+    while (!mgr.IsComplete && guard++ < 10)
+        Assert(mgr.TryAdvanceScene() == SceneOutcome.Advanced, "each Act 1 scene should advance");
+    Assert(mgr.IsComplete && mgr.CurrentScene == null, "the act should be complete with no current scene");
+    AssertThrows<InvalidOperationException>(() => mgr.TryAdvanceScene(), "advancing a completed act should throw");
+});
+
+// --- M2-6: day/night mode state machine (Story Layer Requirement 4 crit. 1-3) ---
+
+Console.WriteLine("--- M2-6: Day/Night mode ---");
+
+Run("M2-6: the world starts in Day mode (the puzzle world)", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    Assert(dn.Mode == WorldMode.Day, "the entry mode is Day (GDD §5.1)");
+});
+
+Run("M2-6: going to night switches mode and reports the credit balance for the §5.3 hand-off", () =>
+{
+    var credits = new CreditManager();
+    credits.Earn(85);
+    var dn = new DayNightController(credits);
+    var transition = dn.ToNight();
+    Assert(dn.Mode == WorldMode.Night, "should now be Night");
+    Assert(transition.From == WorldMode.Day && transition.To == WorldMode.Night, "transition should record Day → Night");
+    Assert(transition.CreditBalance == 85, $"the hand-off should surface the 85-credit balance (§5.3), got {transition.CreditBalance}");
+});
+
+Run("M2-6: returning to day switches back to the puzzle world", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    dn.ToNight();
+    var transition = dn.ToDay();
+    Assert(dn.Mode == WorldMode.Day, "should be back in Day");
+    Assert(transition.From == WorldMode.Night && transition.To == WorldMode.Day, "transition should record Night → Day");
+});
+
+Run("M2-6: switching to the mode you're already in is rejected", () =>
+{
+    var dn = new DayNightController(new CreditManager());
+    AssertThrows<InvalidOperationException>(() => dn.ToDay(), "already Day → ToDay should throw");
+    dn.ToNight();
+    AssertThrows<InvalidOperationException>(() => dn.ToNight(), "already Night → ToNight should throw");
 });
 
 Console.WriteLine("=========================================");
