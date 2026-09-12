@@ -73,40 +73,47 @@ namespace IslandQuest.Story
             return new List<StoryScene>
             {
                 // 1 — Campfire needed, no matches → bow-drill (the gated showcase).
+                // Gated scenes run longer than free beats: the player spent credits,
+                // so the lesson goes deeper and Leo gets his full "but WHY" (§3.3).
                 new StoryScene(NightSetting.Campfire, LifeHack.BowDrillFire,
                     new DialogueSequence(
-                        new DialogueLine(Speaker.Mia, "No matches out here, Leo. But friction and patience make fire."),
-                        new DialogueLine(Speaker.Leo, "Rubbing sticks together? Does that actually work?"),
-                        new DialogueLine(Speaker.Mia, "Watch this — dry wood is everything. Spin the spindle fast, catch the ember in the tinder.")),
+                        new DialogueLine(Speaker.Mia, "No matches, no lighter. Just us and a pile of sticks."),
+                        new DialogueLine(Speaker.Leo, "That's less reassuring than you think it is."),
+                        new DialogueLine(Speaker.Mia, "Friction and patience make fire. Dry wood is everything — if it bends instead of snapping, it's no good to us."),
+                        new DialogueLine(Speaker.Leo, "So we're rubbing sticks together. Like actual cavemen."),
+                        new DialogueLine(Speaker.Mia, "Cavemen had ten thousand years of practice. We've got about twenty minutes before it gets cold."),
+                        new DialogueLine(Speaker.Leo, "But WHY does spinning a stick make fire? It's just... wood."),
+                        new DialogueLine(Speaker.Mia, "Friction grinds the wood into dust and heats it past its ignition point. You're not making a flame — you're making one ember."),
+                        new DialogueLine(Speaker.Mia, "Then you catch it in the tinder and breathe. Gently — an ember dies easy.")),
                     StoryAction.For(StoryActionType.LightCampfire)),
 
                 // 2 — Dirty stream found → 3-layer filtration + boiling.
                 new StoryScene(NightSetting.JungleRiver, LifeHack.WaterFiltration,
                     new DialogueSequence(
-                        new DialogueLine(Speaker.Mia, "That stream's moving, but 'moving' isn't 'safe', Leo."),
-                        new DialogueLine(Speaker.Leo, "So we can't just drink it? It looks clean enough."),
-                        new DialogueLine(Speaker.Mia, "Gravel, sand, charcoal — three layers. Then boil three minutes. Filtering clears the grit; boiling kills what you can't see."))),
+                        new DialogueLine(Speaker.Mia, "It's moving, sure. So is everything living in it."),
+                        new DialogueLine(Speaker.Leo, "...I was about to drink that."),
+                        new DialogueLine(Speaker.Mia, "Gravel, sand, charcoal — three layers, then boil three minutes. The filter clears what you can see. The boiling kills what you can't."))),
 
                 // 3 — Sudden rainstorm → lean-to shelter.
                 new StoryScene(NightSetting.ForestAtNight, LifeHack.LeanToShelter,
                     new DialogueSequence(
-                        new DialogueLine(Speaker.Mia, "Rain's coming in. We build a lean-to — branches at forty-five degrees."),
-                        new DialogueLine(Speaker.Leo, "How much cover do we actually need?"),
-                        new DialogueLine(Speaker.Mia, "At least thirty centimetres of leaves. The angle sheds the water, the thickness keeps it out."))),
+                        new DialogueLine(Speaker.Mia, "Rain's coming. Branches at forty-five degrees and we stay dry."),
+                        new DialogueLine(Speaker.Leo, "How much leaf cover are we talking?"),
+                        new DialogueLine(Speaker.Mia, "Thirty centimetres, minimum. The angle sheds the water, the thickness keeps it out. Any less and you'll feel every drop."))),
 
                 // 4 — Lost after dark → North Star navigation.
                 new StoryScene(NightSetting.ForestAtNight, LifeHack.StarNavigation,
                     new DialogueSequence(
-                        new DialogueLine(Speaker.Mia, "We're turned around. But the sky's a map if you know how to read it."),
-                        new DialogueLine(Speaker.Leo, "Which star do we even follow?"),
-                        new DialogueLine(Speaker.Mia, "The North Star sits over true north. Find it, and you'll never walk in circles again."))),
+                        new DialogueLine(Speaker.Mia, "We're turned around. Good news — the sky's been a map far longer than maps have."),
+                        new DialogueLine(Speaker.Leo, "Which one's the right star? They all look the same to me."),
+                        new DialogueLine(Speaker.Mia, "The North Star. It sits over true north and never wanders. Find it, and you'll never walk in circles again."))),
 
                 // 5 — Leo gets a cut → plantain antiseptic + pine-needle tea.
                 new StoryScene(NightSetting.ForestAtNight, LifeHack.FieldFirstAid,
                     new DialogueSequence(
-                        new DialogueLine(Speaker.Leo, "Ow — it's not deep, but it stings."),
-                        new DialogueLine(Speaker.Mia, "Hold still. Crushed plantain leaf — nature's antiseptic. Pine-needle tea later for the vitamin C."),
-                        new DialogueLine(Speaker.Leo, "Leaves as medicine. Okay, that's actually amazing."))),
+                        new DialogueLine(Speaker.Leo, "Ow. It's not deep, it just really wants attention."),
+                        new DialogueLine(Speaker.Mia, "Hold still. Crushed plantain leaf — nature's antiseptic. Pine-needle tea after, for the vitamin C."),
+                        new DialogueLine(Speaker.Leo, "The weeds are medicine. What else have I been stepping on this whole time?"))),
             };
         }
     }
